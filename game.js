@@ -4,7 +4,7 @@
 const SAVE_KEY = 'deepbloom-save-v1';
 const BAL = {
   pearlDiv: 4e4,          // bar fill n completes when holding pearlDiv × n² Lumen; Pearls = fills × bonuses
-  tideSteps: 10,          // after this many bar fills the tide must be called
+  tideSteps: 100,         // after this many bar fills the tide must be called
   fillGrowth: 0.2,        // each fill is worth +0.2 Pearls more per tide called in this zone (~60 tides to 5,000)
   descendAt: 5000,        // zone Pearls earned before you can descend
   depthMult: 3,           // each Depth Mark: ×3 Lumen and Pearls, stacking
@@ -156,7 +156,8 @@ function tapValue() {
   return (1 + l) * milestoneMult(l) * Math.pow(2, rank('shadow', 'echo')) * petMult('taps') * gearMult('crown') * globalMult();
 }
 // The tide bar feeds on Lumen: fill k completes once the player holds pearlDiv × k²
-// (40K, 160K, 360K … 1M at fill 5 … 4M at fill 10) and that amount is spent into the tide.
+// (40K, 160K, 360K … 1M at fill 5 … 4M at fill 10 … 400M at fill 100) and that amount is
+// spent into the tide.
 // At BAL.tideSteps the tide is full: earning stops until it is called.
 const fillNeed = (k) => BAL.pearlDiv * k * k;
 function checkFills() {
