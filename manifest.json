@@ -1,0 +1,16 @@
+{
+  "name": "Deep Bloom",
+  "short_name": "Deep Bloom",
+  "description": "Grow a glowing reef, call the tide, descend into the deep.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#061A24",
+  "theme_color": "#061A24",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

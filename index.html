@@ -1,0 +1,258 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="theme-color" content="#061A24">
+<title>Deep Bloom</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icons/icon-192.png">
+<!-- iPhone: "Add to Home Screen" opens full-screen with this icon and name -->
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Deep Bloom">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;700;800&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body data-zone="shallows">
+<div id="app">
+
+  <section id="screen-reef" class="screen active" aria-label="Reef">
+    <header class="hud">
+      <div>
+        <div class="label">Lumen</div>
+        <div id="lumen" class="big cyan num">0</div>
+        <div id="rate" class="sub">+0 per second</div>
+      </div>
+      <div class="hud-right-wrap">
+        <div class="hud-right">
+          <span id="pearlChip" class="chip pink"></span>
+          <span id="zoneChip" class="sub small"></span>
+          <span id="depthChip" class="chip gold" hidden></span>
+        </div>
+        <button id="settingsBtn" type="button" class="icon-btn settings-open" aria-label="Settings">
+          <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></svg>
+        </button>
+      </div>
+    </header>
+    <div id="reef" class="reef">
+      <div class="glow" aria-hidden="true"></div>
+      <div class="floor" aria-hidden="true"></div>
+      <div class="coral" aria-hidden="true">
+        <i id="titan" class="titan" hidden></i>
+        <i class="c1"></i><i class="c2"></i><i class="c3"></i>
+        <i class="c4"></i><i class="c5"></i><i class="c6"></i>
+        <i class="c7"></i><i class="c8"></i><i class="c9"></i>
+        <div id="polyps"></div>
+      </div>
+      <div id="fish" class="fish-layer" aria-hidden="true"></div>
+      <div id="reefPets" class="reef-pets" role="img"></div>
+      <div id="pops" class="pops" aria-hidden="true"></div>
+      <div id="bigwave" class="bigwave" aria-hidden="true">
+        <svg viewBox="0 0 200 400" preserveAspectRatio="none">
+          <path d="M0 0 H140 C 190 40, 205 95, 172 122 C 150 140, 160 172, 186 192 C 204 262, 182 340, 200 400 H0 Z" fill="rgba(92,242,214,.55)"/>
+          <path d="M0 30 H120 C 160 60, 170 100, 150 120 C 135 135, 140 165, 160 185 C 175 250, 160 330, 175 400 H0 Z" fill="rgba(46,211,183,.6)"/>
+          <path d="M140 0 C 190 40, 205 95, 172 122 C 150 140, 160 172, 186 192 C 204 262, 182 340, 200 400" fill="none" stroke="#EFFFFB" stroke-width="7" stroke-linecap="round" stroke-dasharray="18 10"/>
+        </svg>
+      </div>
+      <div id="hint" class="hint">Tap the reef to spark Lumen</div>
+      <div id="lightMeter" class="light-meter" hidden>
+        <span>Light</span><div class="bar"><div id="lightBar"></div></div>
+      </div>
+      <div id="burstChip" class="burst" hidden>Current burst ×3</div>
+      <button id="seed" class="seed" type="button" aria-label="Glowing seed: tap for a burst" hidden></button>
+    </div>
+  </section>
+
+  <!-- Kelp Forest home: a merge garden instead of tapping -->
+  <section id="screen-garden" class="screen" aria-label="Kelp garden">
+    <header class="zone-hud">
+      <div>
+        <div class="label">Jade sap</div>
+        <div id="gSap" class="big jade">0</div>
+        <div id="gRate" class="sub">+0 per second</div>
+      </div>
+      <div class="hud-right-wrap">
+        <div class="hud-right">
+          <span id="gPearl" class="chip jadechip"></span>
+          <span class="sub small">Kelp Forest · merge garden</span>
+        </div>
+        <button type="button" class="icon-btn settings-open" aria-label="Settings"><svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></svg></button>
+      </div>
+    </header>
+    <p id="gHint" class="sub pad">Tap two matching plants to merge them into a taller one. Taller kelp makes more sap.</p>
+    <div id="gardenGrid" class="garden-grid" role="grid" aria-label="Kelp garden"></div>
+    <div class="two">
+      <button id="catchSpore" type="button" class="btn primary jade-btn">Catch a spore</button>
+      <div class="panel"><span class="small strong">Next spore on the current</span><div class="bar"><div id="sporeBar" class="fill jade-bg"></div></div></div>
+    </div>
+  </section>
+
+  <!-- Twilight Trench home: a gear auto-battler -->
+  <section id="screen-battle" class="screen" aria-label="Trench battle">
+    <header class="zone-hud">
+      <div>
+        <div class="label">Twilight Trench · <span id="bTier"></span></div>
+        <div id="bStage" class="big"></div>
+        <div id="bLumen" class="sub"></div>
+      </div>
+      <div class="hud-right-wrap">
+        <div class="hud-right">
+          <span id="bPearl" class="chip shadowchip"></span>
+          <span id="bPower" class="sub small"></span>
+        </div>
+        <button type="button" class="icon-btn settings-open" aria-label="Settings"><svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></svg></button>
+      </div>
+    </header>
+    <div class="stack tight">
+      <div class="row"><span id="bLine"></span><span class="muted">Lose: back 1 level</span></div>
+      <div id="bPips" class="pips"></div>
+    </div>
+    <div id="arena" class="arena">
+      <div class="arena-floor" aria-hidden="true"></div>
+      <div class="hp left"><span class="small strong">Your Guardian</span><div class="bar"><div id="myHp" class="fill jade-bg"></div></div></div>
+      <div class="hp right"><span id="foeName" class="small strong"></span><div class="bar"><div id="foeHp" class="fill red-bg"></div></div></div>
+      <button id="bubble" type="button" class="lumen-bubble"></button>
+      <svg id="guardian" aria-hidden="true" class="guardian" width="72" height="80" viewBox="0 0 90 100"><circle cx="45" cy="30" r="22" fill="#172848" stroke="#9DB8FF" stroke-width="3"/><circle cx="45" cy="30" r="12" fill="#9DB8FF" opacity=".5"/><path d="M25 52 C 25 80, 65 80, 65 52 Z" fill="#9DB8FF"/><path d="M65 60 L 88 48" stroke="#FFC46B" stroke-width="5" stroke-linecap="round"/><path id="gCrown" d="M30 20 L 36 6 L 45 16 L 54 6 L 60 20" fill="none" stroke="#4C6E78" stroke-width="3" stroke-linejoin="round"/></svg>
+      <svg id="foe" aria-hidden="true" class="foe" width="104" height="70" viewBox="0 0 90 40"><path id="foeBody" d="M4 22 C 6 8, 50 4, 72 18 C 60 32, 16 36, 4 22 Z"/><path id="foeTail" d="M70 18 L 88 6 L 84 20 L 88 34 Z"/><path d="M6 22 L 22 26" stroke="#050C1C" stroke-width="2.5" stroke-linecap="round"/><circle cx="18" cy="16" r="2.5" fill="#FFF3C4"/></svg>
+      <div id="arenaPops" class="pops" aria-hidden="true"></div>
+      <span class="arena-hint">Tap the bubble for gear · ×2 from level 4</span>
+    </div>
+    <div class="panel">
+      <span id="bLog" class="sub"></span>
+      <div id="bDrops" class="stack tight"></div>
+    </div>
+    <div class="two">
+      <button id="fightBtn" type="button" class="btn primary gear-btn">Fight</button>
+      <button id="autoBtn" type="button" class="btn" aria-pressed="false">Auto: off</button>
+    </div>
+    <div class="label pad">Gear slots</div>
+    <div id="bSlots" class="bslots"></div>
+  </section>
+
+  <section id="screen-creatures" class="screen" aria-label="Creatures">
+    <header class="title-row"><h1 id="creaturesTitle">Creatures</h1><span id="lumen2" class="cyan num-s"></span></header>
+    <div id="buySeg" class="seg" role="group" aria-label="Buy amount">
+      <button type="button" data-mode="x1">×1</button>
+      <button type="button" data-mode="x10">×10</button>
+      <button type="button" data-mode="next">Next</button>
+      <button type="button" data-mode="max">Max</button>
+    </div>
+    <div id="creatureList" class="list"></div>
+    <p id="creaturesNote" class="note">A creature doubles its output at Lv 5, 15, 100, 500 and 1,000. Upgrades reset with the tide; Pearl bonuses don't.</p>
+  </section>
+
+  <section id="screen-tide" class="screen" aria-label="Tide">
+    <div class="tide-hero">
+      <div class="eyebrow pink">The tide is turning</div>
+      <div id="tideGain" class="huge pink num">+0</div>
+      <div id="tideGainLabel" class="strong">Pearls if you call the tide now</div>
+      <div id="tideNeed" class="sub"></div>
+    </div>
+    <div class="two">
+      <div class="panel">
+        <div class="label">Washes away</div>
+        <ul><li>Lumen</li><li>Creature levels</li><li>Bright touch</li></ul>
+      </div>
+      <div class="panel pinkpanel">
+        <div class="label pink">You keep</div>
+        <ul><li>This zone's Pearls + upgrades</li><li>Depth Marks</li></ul>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="row"><span id="descendLabel">Pearls to descend</span><span id="descendCount" class="jade"></span></div>
+      <div class="bar"><div id="descendBar" class="fill jade-bg"></div></div>
+    </div>
+    <p class="note muted center">The tide bar feeds on your Lumen: once you hold what a fill needs, it's spent into the tide and the fill completes, up to 10 per tide. Every tide you call in this zone makes each fill worth more Pearls.</p>
+    <div class="stack">
+      <button id="callTide" type="button" class="btn primary pink-btn">Call the tide</button>
+      <button id="notYet" type="button" class="btn ghost">Not yet, keep growing</button>
+    </div>
+  </section>
+
+  <section id="screen-pearls" class="screen" aria-label="Pearls">
+    <header class="title-row"><h1>Pearls</h1><span id="depthMarks" class="chip gold"></span></header>
+    <div id="pearlChips" class="chips" role="group" aria-label="Pearl type"></div>
+    <div class="panel">
+      <div class="row"><span id="ptName" class="strong"></span><span id="ptFrom" class="sub small"></span></div>
+      <div id="ptBlurb" class="sub"></div>
+    </div>
+    <div id="perkGrid" class="perk-grid"></div>
+    <button id="descendBtn" type="button" class="descend">
+      <span class="row"><span id="dTitle" class="strong"></span><span id="dCount" class="small strong"></span></span>
+      <span id="dBody" class="small"></span>
+    </button>
+    <div class="label pad">The deep · one way down</div>
+    <div id="zoneList" class="zones"></div>
+    <button id="resetBtn" type="button" class="link">Reset all progress</button>
+  </section>
+
+  <section id="screen-dive" class="screen" aria-label="Dive">
+    <header class="title-row"><h1>Dive</h1><span id="lumen3" class="cyan num-s"></span></header>
+    <div id="diveSeg" class="seg dive-seg" role="group" aria-label="Section">
+      <button type="button" data-sub="dungeons">Dungeons</button>
+      <button type="button" data-sub="pets">Pets</button>
+      <button type="button" data-sub="gear">Gear</button>
+    </div>
+    <div id="diveBody" class="stack"></div>
+  </section>
+
+  <!-- Shared by every zone's home screen -->
+  <div id="tidebox" class="panel tidebox">
+    <div class="tide-row">
+      <div class="tide-info">
+        <span class="small strong">Tide gathering</span>
+        <span id="tideCount" class="tide-count pink">+0 Pearls</span>
+        <span id="tidePreview" class="sub small"></span>
+      </div>
+      <button id="reefCallTide" type="button" class="btn small-btn">Call the tide</button>
+    </div>
+    <div class="bar"><div id="tideBar" class="fill pink-bg"></div></div>
+  </div>
+
+  <nav class="tabs" aria-label="Main">
+    <button type="button" data-tab="reef" aria-current="page"><svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 21V9M12 13l-4-4M12 11l4-4M8 21V15M16 21v-8"/></svg><span id="tabHome">Reef</span></button>
+    <button type="button" data-tab="creatures"><svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M3 12c4-6 12-6 15 0-3 6-11 6-15 0zM18 12l4-4v8z"/></svg><span id="tabSecond">Creatures</span></button>
+    <button type="button" data-tab="tide"><svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M2 10c3-3 5-3 8 0s5 3 8 0 3-2 4-1M2 16c3-3 5-3 8 0s5 3 8 0 3-2 4-1"/></svg>Tide<i id="tideDot" class="dot" hidden></i></button>
+    <button type="button" data-tab="pearls"><svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="8"/><circle cx="9.5" cy="9.5" r="2"/></svg>Pearls</button>
+    <button type="button" data-tab="dive"><svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="8" cy="8" r="4"/><path d="M11 11l9 9M16 16l2-2M18 18l2-2"/></svg>Dive/Gear<i id="diveDot" class="dot gold-dot" hidden></i></button>
+  </nav>
+
+  <div id="wave" class="wave" aria-hidden="true"></div>
+
+  <div id="settings" class="modal" hidden>
+    <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="sTitle">
+      <h2 id="sTitle">Settings</h2>
+      <label class="slider"><span>Master volume <b id="vMasterVal"></b></span><input id="vMaster" type="range" min="0" max="100" step="5"></label>
+      <label class="slider"><span>Music <b id="vMusicVal"></b></span><input id="vMusic" type="range" min="0" max="100" step="5"></label>
+      <label class="slider"><span>Sound effects <b id="vSfxVal"></b></span><input id="vSfx" type="range" min="0" max="100" step="5"></label>
+      <label class="toggle"><input id="vMute" type="checkbox"> Mute all sound</label>
+      <button id="sDone" type="button" class="btn primary">Done</button>
+    </div>
+  </div>
+
+  <div id="modal" class="modal" hidden>
+    <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="mTitle">
+      <h2 id="mTitle"></h2>
+      <p id="mBody"></p>
+      <div class="stack">
+        <button id="mOk" type="button" class="btn primary"></button>
+        <button id="mCancel" type="button" class="btn ghost">Cancel</button>
+      </div>
+    </div>
+  </div>
+</div>
+<script src="audio.js"></script>
+<script src="game.js"></script>
+<script>
+  // Offline support when installed from an HTTPS site. Skipped in the native apps and on
+  // localhost, where a cached copy would hide edits during development.
+  if ('serviceWorker' in navigator && !window.Capacitor && location.protocol === 'https:') {
+    navigator.serviceWorker.register('sw.js').catch(() => {});
+  }
+</script>
+</body>
+</html>
