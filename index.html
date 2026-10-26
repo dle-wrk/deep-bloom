@@ -133,6 +133,31 @@
     <div id="bSlots" class="bslots"></div>
   </section>
 
+  <!-- Ember Wastes home: tower defense against fire -->
+  <section id="screen-ember" class="screen" aria-label="Ember defense">
+    <header class="zone-hud">
+      <div>
+        <div class="label">Ash</div>
+        <div id="eAsh" class="big ember-c">0</div>
+        <div id="eRate" class="sub"></div>
+      </div>
+      <div class="hud-right-wrap">
+        <div class="hud-right">
+          <span id="ePearl" class="chip emberchip"></span>
+          <span id="eWave" class="sub small"></span>
+        </div>
+        <button type="button" class="icon-btn settings-open" aria-label="Settings"><svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></svg></button>
+      </div>
+    </header>
+    <div class="row"><span id="eLine"></span><span id="eHp" class="strong"></span></div>
+    <div class="td-wrap"><canvas id="td" aria-label="Ember defense map. Tap a scorched tile beside the path to build a tower."></canvas></div>
+    <div id="tdPanel" class="panel"></div>
+    <div class="two">
+      <button id="eStart" type="button" class="btn primary ember-btn">Start wave</button>
+      <button id="eAuto" type="button" class="btn" aria-pressed="true">Auto waves: on</button>
+    </div>
+  </section>
+
   <section id="screen-creatures" class="screen" aria-label="Creatures">
     <header class="title-row"><h1 id="creaturesTitle">Creatures</h1><span id="lumen2" class="cyan num-s"></span></header>
     <div id="buySeg" class="seg" role="group" aria-label="Buy amount">
@@ -229,8 +254,55 @@
       <label class="slider"><span>Master volume <b id="vMasterVal"></b></span><input id="vMaster" type="range" min="0" max="100" step="5"></label>
       <label class="slider"><span>Music <b id="vMusicVal"></b></span><input id="vMusic" type="range" min="0" max="100" step="5"></label>
       <label class="slider"><span>Sound effects <b id="vSfxVal"></b></span><input id="vSfx" type="range" min="0" max="100" step="5"></label>
+      <label class="select"><span>Music</span>
+        <select id="musicStyle">
+          <option value="zone">Changes with each zone</option>
+          <option value="reef">Sunlit reef</option>
+          <option value="kelp">Kelp sway</option>
+          <option value="trench">Deep dark</option>
+          <option value="ember">Ashfall</option>
+          <option value="box">Music box</option>
+        </select>
+      </label>
+      <label class="select"><span>Sound effects style</span>
+        <select id="sfxStyle">
+          <option value="bubbles">Bubbles</option>
+          <option value="crystal">Crystal</option>
+          <option value="retro">Retro</option>
+        </select>
+      </label>
       <label class="toggle"><input id="vMute" type="checkbox"> Mute all sound</label>
       <button id="sDone" type="button" class="btn primary">Done</button>
+    </div>
+  </div>
+
+  <!-- End of the demo -->
+  <div id="ending" class="ending" hidden role="dialog" aria-modal="true" aria-labelledby="endTitle">
+    <h2 id="endTitle">Thank you for playing the Deep Bloom demo</h2>
+    <p>The fires are out. You grew a reef from a single spark, all the way down to the Ember Wastes and a trillion Ember Pearls.</p>
+    <div id="endStats" class="stats"></div>
+    <div class="stack">
+      <button id="endKeep" type="button" class="btn primary">Keep playing</button>
+      <button id="endRewind" type="button" class="btn">Return to the Shallows (start over with a Bloom Star)</button>
+    </div>
+  </div>
+  <div id="rewind" class="rewind" hidden aria-live="polite"><b id="rwZone"></b><span id="rwText">The tide runs backwards…</span></div>
+
+  <!-- Slot Wheel: spend shards to spin a bonus that sticks to a gear slot -->
+  <div id="wheel" class="modal" hidden>
+    <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="wTitle">
+      <div class="row"><h2 id="wTitle"></h2><span id="wShards" class="small strong gold"></span></div>
+      <p id="wNow" class="sub"></p>
+      <div class="wheel-wrap">
+        <span class="wheel-pointer" aria-hidden="true"></span>
+        <svg id="wheelSvg" class="wheel-svg" viewBox="-100 -100 200 200" role="img" aria-label="Slot wheel"></svg>
+      </div>
+      <p id="wResult" class="center strong" aria-live="polite"></p>
+      <label class="slider"><span>Shards to spend <b id="wStakeVal"></b></span><input id="wStake" type="range" min="1" max="1" step="1"></label>
+      <div class="stack">
+        <button id="wSpin" type="button" class="btn primary gear-btn">Spin</button>
+        <button id="wClose" type="button" class="btn ghost">Close</button>
+      </div>
     </div>
   </div>
 
