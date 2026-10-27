@@ -340,7 +340,19 @@
   // Offline support when installed from an HTTPS site. Skipped in the native apps and on
   // localhost, where a cached copy would hide edits during development.
   if ('serviceWorker' in navigator && !window.Capacitor && location.protocol === 'https:') {
-    navigator.serviceWorker.register('sw.js').catch(() => {});
+    navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then((reg) => {
+      // iPhones resume the app instead of reopening it, so check for a new build on resume too.
+      document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') reg.update().catch(() => {}); });
+    }).catch(() => {});
+    // When a new build takes over, reload once so it shows straight away (the save is kept).
+    const hadWorker = !!navigator.serviceWorker.controller;
+    let reloaded = false;
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (!hadWorker || reloaded) return;
+      reloaded = true;
+      save();
+      location.reload();
+    });
   }
 </script>
 </body>
