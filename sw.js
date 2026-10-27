@@ -1,6 +1,6 @@
 // Offline support for the installed web app: serve the game from cache, update in the
 // background. Bump VERSION whenever game files change so players get the new build.
-const VERSION = 'deep-bloom-v3';
+const VERSION = 'deep-bloom-v4';
 const SHELL = ['./', 'index.html', 'style.css', 'audio.js', 'game.js', 'manifest.json',
   'icons/icon-192.png', 'icons/icon-512.png', 'icons/apple-touch-icon.png'];
 

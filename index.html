@@ -272,6 +272,7 @@
         </select>
       </label>
       <label class="toggle"><input id="vMute" type="checkbox"> Mute all sound</label>
+      <button id="storyBtn" type="button" class="btn" hidden>Story so far</button>
       <button id="sDone" type="button" class="btn primary">Done</button>
     </div>
   </div>
@@ -279,7 +280,7 @@
   <!-- End of the demo -->
   <div id="ending" class="ending" hidden role="dialog" aria-modal="true" aria-labelledby="endTitle">
     <h2 id="endTitle">Thank you for playing the Deep Bloom demo</h2>
-    <p>The fires are out. You grew a reef from a single spark, all the way down to the Ember Wastes and a trillion Ember Pearls.</p>
+    <p id="endText">The fires are out. You grew a reef from a single spark, all the way down to the Ember Wastes and a trillion Ember Pearls.</p>
     <div id="endStats" class="stats"></div>
     <div class="stack">
       <button id="endKeep" type="button" class="btn primary">Keep playing</button>
@@ -308,6 +309,7 @@
 
   <div id="modal" class="modal" hidden>
     <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="mTitle">
+      <span id="mEyebrow" class="eyebrow gold" hidden></span>
       <h2 id="mTitle"></h2>
       <p id="mBody"></p>
       <div class="stack">

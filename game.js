@@ -89,7 +89,7 @@ function freshState() {
     lumen: 0, tideEarned: 0, totalEarned: 0, levels: {}, revealed: 2,
     zone: 0, pearls: 0, zoneEarned: 0, depthMarks: 0, tides: 0, zoneTides: 0, tideFills: 0,
     perks: { white: {}, jade: {}, shadow: {}, ember: {} },
-    stars: 0, demoDone: false, homeZone: null, stash: {},
+    stars: 0, demoDone: false, homeZone: null, stash: {}, storySeen: [],
     ember: { wave: 1, best: 0, auto: true, towers: [], hp: 20, ashRate: 0 },
     buyMode: 'x1', light: 1, burstUntil: 0, lastSeen: Date.now(),
     audio: { master: 0.8, music: 0.6, sfx: 0.8, muted: false, musicStyle: 'zone', sfxStyle: 'bubbles' },
@@ -586,6 +586,7 @@ function syncSettings() {
   $('vMute').checked = S.audio.muted;
   $('musicStyle').value = S.audio.musicStyle || 'zone';
   $('sfxStyle').value = S.audio.sfxStyle || 'bubbles';
+  $('storyBtn').hidden = !(S.stars > 0 && S.storySeen && S.storySeen.length);
   Sound.setVolumes(S.audio);
   Sound.setMusicStyle(S.audio.musicStyle || 'zone');
   Sound.setSfxStyle(S.audio.sfxStyle || 'bubbles');
@@ -601,7 +602,10 @@ $('vMute').addEventListener('change', () => { S.audio.muted = $('vMute').checked
 document.querySelectorAll('.settings-open').forEach((b) => b.addEventListener('click', () => { Sound.click(); syncSettings(); $('settings').hidden = false; $('sDone').focus(); }));
 $('sDone').addEventListener('click', () => { $('settings').hidden = true; save(); });
 
-function showModal({ title, body, ok, cancel = 'Cancel', onOk }) {
+function showModal({ title, body, ok, cancel = 'Cancel', onOk, eyebrow = '', story = false }) {
+  $('mEyebrow').textContent = eyebrow;
+  $('mEyebrow').hidden = !eyebrow;
+  $('modal').classList.toggle('story', story);
   $('mTitle').textContent = title;
   $('mBody').textContent = body;
   $('mOk').textContent = ok;
@@ -2030,9 +2034,61 @@ function visitZone(i) {
   if (i === EMBER) { playWave('sink'); Sound.descend(); } else { playWave('tide'); Sound.tide(); }
 }
 
+// ---- The storyline (only after the rewind) ----------------------------------------
+// The first playthrough has no story. Once you finish the demo and let the tide run
+// backwards, you "remember", and Echo, the oldest pearl, tells you what really happened,
+// one chapter at a time as you reach each moment again.
+// The arc: White, your Lumen floods the dark sea with light. Jade, that light feeds a
+// bacterial bloom. Shadow, divers strip the creatures it drove deep, for gear. Ember, the
+// sea fights back.
+const STORY = [
+  { id: 'wake', title: 'You remember', when: () => true,
+    text: "You remember the fire. Then the tide ran backwards and the sea forgot.\n\nBut you didn't.\n\nI'm Echo, the oldest pearl in the reef. Only those who remember can hear me. This time, watch what your light does." },
+  { id: 'firstTide', title: 'Too much light', when: () => S.tides >= 1,
+    text: "Every spark of Lumen lights the water a little more. This sea was dark for a reason.\n\nThe creatures here lived by moonlight. Now they can't find the night. The fish you thought were drawn to your reef were lost." },
+  { id: 'deep', title: 'The light sinks', when: () => S.depthMarks >= 1 || S.zoneEarned >= ZONES[0].goal,
+    text: "So much light, it can't stay in the Shallows. It's sinking, drifting down into the forest below, ahead of you.\n\nLast time you followed it without asking where it went." },
+  { id: 'kelp', title: 'The bloom', when: () => S.depthMarks >= 1,
+    text: "Look at the garden again. It isn't kelp.\n\nIt's a bloom: bacteria feeding on the light you poured down. Every merge, every taller plant, every drop of sap: it's spreading, and it's choking the water." },
+  { id: 'crown', title: 'The Jade crown', when: () => S.garden.cells.includes(KELP.length - 1),
+    text: "The Jade crown is the bloom at its peak. Bright, beautiful, and hungry.\n\nBeneath it, the water has no air left. Nothing else grows in the forest now. Everything that could swim has fled into the deep." },
+  { id: 'trench', title: 'The divers', when: () => S.depthMarks >= 2,
+    text: "The creatures fled down here, into the dark. And the divers followed them.\n\nThey came for shells to make armour, fins to make charms, eyes to make lanterns." },
+  { id: 'kraken', title: 'What the gear is made of', when: () => S.depthMarks >= 2 && (S.battle.wave > 1 || S.battle.diff > 0),
+    text: "Your Guardian is a diver too.\n\nThe Angler Lure was an anglerfish. The Nautilus Plate was a nautilus. The Whalebone Shell was a whale. Every chest you open was something that lived. Every win empties the trench a little more." },
+  { id: 'ember', title: 'The sea fights back', when: () => !!S.reachedEmber,
+    text: "The fire isn't falling from the surface. It's rising from the deep.\n\nThe vents have opened. The sea is boiling up against everything that took from it: the light, the bloom, the divers. This is the sea fighting back." },
+  { id: 'truth', title: 'One spark', when: () => !!S.reachedEmber && S.ember.best >= 10,
+    text: "You built towers to hold the fire back and protect your reef.\n\nBut the reef is where it started. The light, the bloom, the divers, the fire: all of it from one spark you never stopped feeding." },
+  { id: 'end', title: 'Choose', when: () => S.zone === EMBER && S.zoneEarned >= END_GOAL,
+    text: "A trillion Pearls. The sea has said what it needed to say.\n\nYou can keep the light burning, or let the tide run backwards and grow gently this time, knowing what it costs.\n\nEither way, I'll be here. I always am." },
+];
+const storyActive = () => (S.stars || 0) > 0;
+const nextChapter = () => (storyActive() ? STORY.find((c) => !S.storySeen.includes(c.id) && c.when()) : null);
+function checkStory() {
+  if (!storyActive() || ui.washing || ui.endingOpen || !$('modal').hidden || !$('settings').hidden || !$('wheel').hidden) return;
+  const c = nextChapter();
+  if (!c) return;
+  S.storySeen.push(c.id);
+  save();
+  Sound.perk();
+  showModal({ eyebrow: `Echo · Chapter ${STORY.indexOf(c) + 1} of ${STORY.length}`, title: c.title, body: c.text, ok: 'Continue', cancel: null, story: true });
+}
+$('storyBtn').addEventListener('click', () => {
+  const seen = STORY.filter((c) => S.storySeen.includes(c.id));
+  $('settings').hidden = true;
+  showModal({
+    eyebrow: `The story so far · ${seen.length} of ${STORY.length} chapters`,
+    title: 'What Echo told you',
+    body: seen.map((c) => `${STORY.indexOf(c) + 1}. ${c.title}\n${c.text}`).join('\n\n'),
+    ok: 'Close', cancel: null, story: true,
+  });
+});
+
 // ---- The end of the demo ---------------------------------------------------------
 function checkEnding() {
-  if (S.zone === EMBER && !visiting() && S.zoneEarned >= END_GOAL && !S.demoDone && !ui.washing && !ui.endingOpen) showEnding();
+  if (S.zone === EMBER && !visiting() && S.zoneEarned >= END_GOAL && !S.demoDone && !ui.washing && !ui.endingOpen
+    && $('modal').hidden && !nextChapter()) showEnding();
 }
 function showEnding() {
   ui.endingOpen = true;
@@ -2043,6 +2099,9 @@ function showEnding() {
     ['Lumen ever made', fmt(S.totalEarned)], ['Bloom Stars', S.stars || 0],
   ];
   $('endStats').innerHTML = stats.map(([k, v]) => `<div><b>${v}</b><span>${k}</span></div>`).join('');
+  $('endText').textContent = storyActive()
+    ? 'This time you remembered. The light, the bloom, the divers, the fire: you saw what every spark cost the sea.'
+    : 'The fires are out. You grew a reef from a single spark, all the way down to the Ember Wastes and a trillion Ember Pearls.';
   $('ending').hidden = false;
   Sound.milestone();
   $('endKeep').focus();
@@ -2072,6 +2131,7 @@ $('endRewind').addEventListener('click', () => {
     S = freshState();
     S.stars = stars;
     S.audio = audio;
+    S.storySeen = []; // each new loop tells the story again, from the start
     save();
     ui.endingOpen = false;
     ui.pearlView = null;
@@ -2110,6 +2170,7 @@ function updateUI() {
     if (isTrench()) updateBattle();
     if (isEmber()) updateEmber();
   }
+  checkStory();
   checkEnding();
   if (ui.tab === 'creatures') updateCreatures();
   if (ui.tab === 'tide') updateTide();
