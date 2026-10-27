@@ -250,6 +250,10 @@ p.pad { margin: 0; padding: 0 4px; }
 .gcell svg { margin-bottom: 4px; transform-origin: 50% 100%; animation: sway 4s ease-in-out infinite; }
 .gcell span { position: absolute; top: 3px; left: 5px; font-size: 10px; font-weight: 700; color: var(--text); }
 .gcell.sel { border-color: var(--gold); animation: pick 1s ease-in-out infinite; }
+.garden-grid { touch-action: none; }
+.gcell.lifted { opacity: .35; }
+.gcell.target { border-color: var(--gold); }
+.gcell.gdrag { position: fixed; z-index: 50; pointer-events: none; scale: 1.12; opacity: .92; box-shadow: 0 8px 20px rgba(0, 0, 0, .5); }
 .gcell.merged { animation: swpop .6s cubic-bezier(.3, 1.8, .5, 1); border-color: var(--jade); }
 @keyframes pick { 0%, 100% { scale: 1; } 50% { scale: 1.06; } }
 
@@ -302,6 +306,12 @@ p.pad { margin: 0; padding: 0 4px; }
 .tower-opt b { font-size: 12px; }
 .tower-opt span { font-size: 11px; color: var(--sub); }
 .tower-opt:disabled { opacity: .45; cursor: default; }
+.loadout { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.lo-card { background: var(--panel); border: 2px solid var(--line); border-radius: 14px; padding: 10px; display: flex; flex-direction: column; gap: 3px; text-align: left; font: inherit; color: inherit; cursor: pointer; min-height: 84px; }
+.lo-card b { color: var(--tc); font-size: 14px; }
+.lo-card span { font-size: 12px; color: var(--sub); }
+.lo-card.on { border-color: var(--tc); background: color-mix(in srgb, var(--tc) 14%, var(--panel)); }
+.lo-card:disabled { opacity: .45; cursor: default; }
 
 /* Ending + rewind */
 .ending { position: absolute; inset: 0; z-index: 30; background: #0B0604; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; padding: 32px 24px; text-align: center; }
@@ -330,6 +340,13 @@ p.pad { margin: 0; padding: 0 4px; }
 .gslot-wrap { display: flex; flex-direction: column; }
 .gslot-wrap .gslot { width: 100%; }
 .bslot { cursor: pointer; font: inherit; color: inherit; }
+.wups summary { font-size: 14px; font-weight: 700; color: var(--gold); cursor: pointer; min-height: 32px; display: flex; align-items: center; }
+#wUps { display: flex; flex-direction: column; gap: 8px; padding-top: 4px; }
+.wup { display: flex; align-items: center; gap: 10px; }
+.wup > div { flex: 1; min-width: 0; display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 6px; }
+.wup .sub { flex-basis: 100%; }
+.wup .buy { min-height: 44px; min-width: 96px; border: 0; border-radius: 14px; background: var(--gold); color: #2A1A04; font-size: 13px; font-weight: 700; cursor: pointer; padding: 4px 8px; }
+.wup .buy:disabled { background: var(--track); color: var(--muted); cursor: default; }
 .wheel-link { font-size: 11px; font-weight: 700; color: var(--gold); background: none; border: 0; padding: 4px; min-height: 32px; cursor: pointer; }
 
 /* Tabs */
@@ -374,6 +391,7 @@ p.pad { margin: 0; padding: 0 4px; }
 .tabs .gold-dot { background: var(--gold); }
 
 .tabs { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); background: var(--deep); padding: 8px 8px calc(12px + env(safe-area-inset-bottom)); flex-shrink: 0; }
+.tabs.four { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 .tabs button { min-height: 52px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; background: none; border: 0; color: var(--muted); font-size: 12px; font-weight: 700; position: relative; cursor: pointer; }
 .tabs button[aria-current="page"] { color: var(--cyan); }
 .tabs .dot { position: absolute; top: 8px; right: calc(50% - 18px); width: 9px; height: 9px; border-radius: 50%; background: var(--pink); }
@@ -390,6 +408,12 @@ p.pad { margin: 0; padding: 0 4px; }
 .sheet p { margin: 0; font-size: 15px; line-height: 1.45; color: var(--sub); }
 
 /* Reduced motion keeps the gentle reef life; only the big screen-wide effects go. */
+.set-head { margin: 6px 0 -4px; font-size: 12px; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); }
+.btn.danger { background: none; border: 1.5px solid #FF8A8A; color: #FF8A8A; }
+body.no-pops .pop, body.no-pops .float { display: none; }
+body.calm .ring { display: none; }
+body.calm .wave.go { animation: none; visibility: hidden; }
+body.calm .bigwave.go { animation-duration: .9s; }
 @media (prefers-reduced-motion: reduce) {
   .ring { display: none; }
   .wave.go { animation: none; visibility: hidden; }

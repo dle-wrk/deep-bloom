@@ -78,7 +78,7 @@
       <div class="hud-right-wrap">
         <div class="hud-right">
           <span id="gPearl" class="chip jadechip"></span>
-          <span class="sub small">Kelp Forest · merge garden</span>
+          <span id="gModeLabel" class="sub small">Kelp Forest · merge garden</span>
         </div>
         <button type="button" class="icon-btn settings-open" aria-label="Settings"><svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></svg></button>
       </div>
@@ -87,7 +87,7 @@
     <div id="gardenGrid" class="garden-grid" role="grid" aria-label="Kelp garden"></div>
     <div class="two">
       <button id="catchSpore" type="button" class="btn primary jade-btn">Catch a spore</button>
-      <div class="panel"><span class="small strong">Next spore on the current</span><div class="bar"><div id="sporeBar" class="fill jade-bg"></div></div></div>
+      <div class="panel"><span id="sporeLabel" class="small strong">Next spore on the current</span><div class="bar"><div id="sporeBar" class="fill jade-bg"></div></div></div>
     </div>
   </section>
 
@@ -95,7 +95,7 @@
   <section id="screen-battle" class="screen" aria-label="Trench battle">
     <header class="zone-hud">
       <div>
-        <div class="label">Twilight Trench · <span id="bTier"></span></div>
+        <div class="label"><span id="bZoneLabel">Twilight Trench · </span><span id="bTier"></span></div>
         <div id="bStage" class="big"></div>
         <div id="bLumen" class="sub"></div>
       </div>
@@ -113,7 +113,7 @@
     </div>
     <div id="arena" class="arena">
       <div class="arena-floor" aria-hidden="true"></div>
-      <div class="hp left"><span class="small strong">Your Guardian</span><div class="bar"><div id="myHp" class="fill jade-bg"></div></div></div>
+      <div class="hp left"><span id="myName" class="small strong">Your Guardian</span><div class="bar"><div id="myHp" class="fill jade-bg"></div></div></div>
       <div class="hp right"><span id="foeName" class="small strong"></span><div class="bar"><div id="foeHp" class="fill red-bg"></div></div></div>
       <button id="bubble" type="button" class="lumen-bubble"></button>
       <svg id="guardian" aria-hidden="true" class="guardian" width="72" height="80" viewBox="0 0 90 100"><circle cx="45" cy="30" r="22" fill="#172848" stroke="#9DB8FF" stroke-width="3"/><circle cx="45" cy="30" r="12" fill="#9DB8FF" opacity=".5"/><path d="M25 52 C 25 80, 65 80, 65 52 Z" fill="#9DB8FF"/><path d="M65 60 L 88 48" stroke="#FFC46B" stroke-width="5" stroke-linecap="round"/><path id="gCrown" d="M30 20 L 36 6 L 45 16 L 54 6 L 60 20" fill="none" stroke="#4C6E78" stroke-width="3" stroke-linejoin="round"/></svg>
@@ -272,7 +272,21 @@
         </select>
       </label>
       <label class="toggle"><input id="vMute" type="checkbox"> Mute all sound</label>
+      <h3 class="set-head">Display</h3>
+      <label class="select"><span>Big numbers</span>
+        <select id="oNumbers">
+          <option value="short">Short (1.2M, 3.4B)</option>
+          <option value="sci">Scientific (1.2e6, 3.4e9)</option>
+        </select>
+      </label>
+      <label class="toggle"><input id="oPops" type="checkbox"> Show number pop-ups</label>
+      <label class="toggle"><input id="oCalm" type="checkbox"> Calm effects (softer waves and flashes)</label>
+      <h3 class="set-head">Game</h3>
+      <label class="toggle"><input id="oVibrate" type="checkbox"> Vibration</label>
+      <label class="toggle"><input id="oAwake" type="checkbox"> Keep screen on while playing</label>
       <button id="storyBtn" type="button" class="btn" hidden>Story so far</button>
+      <button id="oReset" type="button" class="btn danger">Erase all progress</button>
+      <span id="oVersion" class="sub small center"></span>
       <button id="sDone" type="button" class="btn primary">Done</button>
     </div>
   </div>
@@ -280,7 +294,7 @@
   <!-- End of the demo -->
   <div id="ending" class="ending" hidden role="dialog" aria-modal="true" aria-labelledby="endTitle">
     <h2 id="endTitle">Thank you for playing the Deep Bloom demo</h2>
-    <p id="endText">The fires are out. You grew a reef from a single spark, all the way down to the Ember Wastes and a trillion Ember Pearls.</p>
+    <p id="endText">You grew a reef from a single spark, all the way down to the Ember Wastes, then climbed back up to the Shallows.</p>
     <div id="endStats" class="stats"></div>
     <div class="stack">
       <button id="endKeep" type="button" class="btn primary">Keep playing</button>
@@ -300,6 +314,7 @@
       </div>
       <p id="wResult" class="center strong" aria-live="polite"></p>
       <label class="slider"><span>Shards to spend <b id="wStakeVal"></b></span><input id="wStake" type="range" min="1" max="1" step="1"></label>
+      <details class="wups"><summary>Wheel upgrades</summary><div id="wUps"></div></details>
       <div class="stack">
         <button id="wSpin" type="button" class="btn primary gear-btn">Spin</button>
         <button id="wClose" type="button" class="btn ghost">Close</button>

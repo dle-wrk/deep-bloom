@@ -32,18 +32,26 @@ const CREATURES = [
 // pearlMult: how much each Pearl step is worth here, so every zone takes about as long.
 const ZONES = [
   { id: 'shallows', name: 'Shallows', pearl: 'white', goal: 5000, pearlMult: 1, rule: 'Tap, grow, tide.' },
-  { id: 'kelp', name: 'Kelp Forest', pearl: 'jade', goal: 1e6, pearlMult: 200, rule: 'A merge garden: combine plants to grow taller kelp.' },
-  { id: 'trench', name: 'Twilight Trench', pearl: 'shadow', goal: 1e9, pearlMult: 4e4, rule: 'A gear auto-battler: stages 1-1 to 9-10, then Hard, Extreme, Godlike…' },
+  { id: 'kelp', name: 'Kelp Forest', pearl: 'jade', goal: 1e6, pearlMult: 200, rule: 'A merge garden: combine plants to grow taller kelp.',
+    ascentRule: 'Unmake the bloom: split the plants apart until the water runs clear.' },
+  { id: 'trench', name: 'Twilight Trench', pearl: 'shadow', goal: 1e9, pearlMult: 4e4, rule: 'A gear auto-battler: stages 1-1 to 9-10, then Hard, Extreme, Godlike…',
+    ascentRule: 'The uprising: you are the fish now, driving the divers out of the trench.' },
   { id: 'ember', name: 'Ember Wastes', pearl: 'ember', goal: 1e12, pearlMult: 8e6, rule: 'Tower defense: the surface burned, and the fire is coming down. Snuff it out.' },
 ];
 const EMBER = 3;
 const END_GOAL = ZONES[EMBER].goal;
+// After the Ember Wastes you climb back up, one way: 1T Ember → the Trench (as the fish),
+// 1B Shadow → the Kelp Forest (unmerging the bloom), 1M Jade → the Shallows, which ends the demo.
+const ascending = () => (S.ascent || 0) > 0 && (S.ascent || 0) < 3;
+const isUprising = () => S.ascent === 1 && S.zone === 2;
+const isUnbloom = () => S.ascent === 2 && S.zone === 1;
+const zoneRule = (z, i) => (S.ascent && i === S.zone && z.ascentRule ? z.ascentRule : z.rule);
 
 const PEARLS = {
   white: { name: 'White', color: '#F4EEE6', blurb: 'Spend them here. When you descend, they and their upgrades are gone for good.' },
   jade: { name: 'Jade', color: '#6FE3A5', blurb: 'You start from zero here, boosted by your Depth Mark. Upgrades that bend the rules.' },
   shadow: { name: 'Shadow', color: '#9DB8FF', blurb: 'Rare Pearls from the dark, earned in battle. Each one is worth a lot.' },
-  ember: { name: 'Ember', color: '#FF9A5C', blurb: 'Pearls pulled from the ashes. Reach 1 trillion to finish the demo.' },
+  ember: { name: 'Ember', color: '#FF9A5C', blurb: 'Pearls pulled from the ashes. Reach 1 trillion to start the climb back up.' },
 };
 
 // Costs are in "zone units": they're multiplied by the zone's pearlMult (see perkCost).
@@ -89,10 +97,11 @@ function freshState() {
     lumen: 0, tideEarned: 0, totalEarned: 0, levels: {}, revealed: 2,
     zone: 0, pearls: 0, zoneEarned: 0, depthMarks: 0, tides: 0, zoneTides: 0, tideFills: 0,
     perks: { white: {}, jade: {}, shadow: {}, ember: {} },
-    stars: 0, demoDone: false, homeZone: null, stash: {}, storySeen: [],
-    ember: { wave: 1, best: 0, auto: true, towers: [], hp: 20, ashRate: 0 },
+    stars: 0, demoDone: false, homeZone: null, stash: {}, storySeen: [], ascent: 0,
+    ember: { wave: 1, best: 0, auto: true, towers: [], hp: 20, ashRate: 0, loadout: ['spout', 'pump', 'cannon'], up: {} },
     buyMode: 'x1', light: 1, burstUntil: 0, lastSeen: Date.now(),
     audio: { master: 0.8, music: 0.6, sfx: 0.8, muted: false, musicStyle: 'zone', sfxStyle: 'bubbles' },
+    opts: { numbers: 'short', vibrate: true, calm: false, pops: true, awake: false },
     tideUnlocked: false,
     keys: { date: '', lumen: 2, pearl: 2, egg: 2 },
     dungeons: { lumen: 1, pearl: 1, egg: 1 },
@@ -113,6 +122,7 @@ function load() {
     if (raw) {
       const s = Object.assign(freshState(), JSON.parse(raw));
       s.perks = Object.assign({ white: {}, jade: {}, shadow: {}, ember: {} }, s.perks);
+      s.ember = Object.assign(freshState().ember, s.ember);
       s.gear.slotBonus = Object.assign({ crown: 1, shell: 1, charm: 1, lantern: 1 }, s.gear.slotBonus);
       return s;
     }
@@ -120,6 +130,7 @@ function load() {
   return freshState();
 }
 function save() {
+  if (ui.erasing) return;
   S.lastSeen = Date.now();
   try { localStorage.setItem(SAVE_KEY, JSON.stringify(S)); } catch (e) { /* storage unavailable */ }
 }
@@ -129,6 +140,7 @@ const UNITS = ['', 'K', 'M', 'B', 'T', 'Qa', 'Qi', 'Sx', 'Sp', 'Oc', 'No', 'Dc']
 function fmt(n) {
   if (!isFinite(n)) return '∞';
   if (n < 1000) return n < 10 && n % 1 ? n.toFixed(1) : String(Math.floor(n));
+  if (S && S.opts && S.opts.numbers === 'sci') return n.toExponential(2).replace('e+', 'e');
   let i = 0;
   while (n >= 1000 && i < UNITS.length - 1) { n /= 1000; i++; }
   if (n >= 1000) return n.toExponential(2);
@@ -339,12 +351,16 @@ function resetRun() {
   S.light = 1;
   S.burstUntil = 0;
   S.garden = freshState().garden;
-  if (rank('jade', 'nursery')) [0, 1, 2].forEach((i) => { S.garden.cells[i * 2] = 3; });
+  if (isUnbloom()) seedBloom();
+  else if (rank('jade', 'nursery')) [0, 1, 2].forEach((i) => { S.garden.cells[i * 2] = 3; });
+  ui.nextCreep = 0;
+  ui.nextGraze = 0;
   ui.gardenSel = -1;
   ui.gardenDirty = true;
   ui.battleDrops = [];
   // Ember Wastes: the tide washes the towers away and the fire starts over from wave 1.
   S.ember.towers = [];
+  S.ember.up = {};
   S.ember.wave = 1;
   S.ember.hp = emberMaxHp();
   if (isEmber()) S.lumen += (3000 + 3000 * rank('ember', 'cistern')) * Math.pow(BAL.depthMult, S.depthMarks);
@@ -399,7 +415,31 @@ function confirmTide() {
 // earlier zone (its own Pearls and progress are kept separately) and come back.
 const visiting = () => S.homeZone !== null && S.homeZone !== undefined;
 function canDescend() {
-  return !visiting() && S.zone < EMBER && S.zoneEarned >= zone().goal;
+  return !visiting() && !S.ascent && S.zone < EMBER && S.zoneEarned >= zone().goal;
+}
+function canAscend() {
+  if (visiting() || S.zoneEarned < zone().goal) return false;
+  return (S.zone === EMBER && !S.ascent) || ascending();
+}
+function ascend() {
+  if (!canAscend()) return;
+  S.perks[pearlType()] = {};
+  S.pearls = 0;
+  S.zoneEarned = 0;
+  S.zoneTides = 0;
+  S.zone -= 1;
+  S.ascent = (S.ascent || 0) + 1;
+  S.depthMarks += 1;
+  S.lumen = 0;
+  if (S.zone === 2) S.battle = freshState().battle;
+  resetRun();
+  ui.pearlView = null;
+  applyZone();
+  save();
+  switchTab('reef');
+  playWave('tide');
+  Sound.tide();
+  if (S.zone === 0) { S.ascent = 3; save(); }
 }
 function descend() {
   if (!canDescend()) return;
@@ -547,7 +587,7 @@ function renderReefPets() {
 }
 
 // ---- Tabs & modal ----------------------------------------------------------
-// The home tab shows each zone's own game; in the Trench the second tab opens Gear.
+// The home tab shows each zone's own game; the Trench hides the second tab (gear is under Dive/Gear).
 const homeScreen = () => (isKelp() ? 'garden' : isTrench() ? 'battle' : isEmber() ? 'ember' : 'reef');
 function switchTab(tab) {
   clearEffects();
@@ -587,10 +627,48 @@ function syncSettings() {
   $('musicStyle').value = S.audio.musicStyle || 'zone';
   $('sfxStyle').value = S.audio.sfxStyle || 'bubbles';
   $('storyBtn').hidden = !(S.stars > 0 && S.storySeen && S.storySeen.length);
+  const o = S.opts;
+  $('oNumbers').value = o.numbers;
+  $('oVibrate').checked = o.vibrate;
+  $('oVibrate').closest('label').hidden = !navigator.vibrate;
+  $('oCalm').checked = o.calm;
+  $('oPops').checked = o.pops;
+  $('oAwake').checked = o.awake;
+  $('oAwake').closest('label').hidden = !('wakeLock' in navigator);
+  document.body.classList.toggle('calm', o.calm);
+  document.body.classList.toggle('no-pops', !o.pops);
+  keepAwake(o.awake);
   Sound.setVolumes(S.audio);
   Sound.setMusicStyle(S.audio.musicStyle || 'zone');
   Sound.setSfxStyle(S.audio.sfxStyle || 'bubbles');
 }
+// Display and game options.
+let wakeLock = null;
+function keepAwake(on) {
+  if (!('wakeLock' in navigator)) return;
+  if (on && !wakeLock && document.visibilityState === 'visible') {
+    navigator.wakeLock.request('screen').then((l) => { wakeLock = l; l.addEventListener('release', () => { wakeLock = null; }); }).catch(() => {});
+  } else if (!on && wakeLock) { wakeLock.release(); wakeLock = null; }
+}
+document.addEventListener('visibilitychange', () => { if (S.opts.awake) keepAwake(true); });
+const buzz = (ms) => { if (S.opts.vibrate && navigator.vibrate) navigator.vibrate(ms); };
+['buy', 'milestone'].forEach((k) => {
+  const play = Sound[k].bind(Sound);
+  Sound[k] = (...a) => { buzz(k === 'buy' ? 8 : [20, 40, 30]); return play(...a); };
+});
+[['oVibrate', 'vibrate'], ['oCalm', 'calm'], ['oPops', 'pops'], ['oAwake', 'awake']].forEach(([id, key]) =>
+  $(id).addEventListener('change', () => { S.opts[key] = $(id).checked; if (key === 'vibrate') buzz(20); syncSettings(); save(); }));
+$('oNumbers').addEventListener('change', () => { S.opts.numbers = $('oNumbers').value; syncSettings(); save(); ui.builtKey = ''; updateUI(); });
+$('oReset').addEventListener('click', () => {
+  $('settings').hidden = true;
+  showModal({
+    title: 'Erase all progress?',
+    body: 'Every zone, Pearl, gear piece, pet and Bloom Star is deleted from this device. There is no undo.',
+    ok: 'Erase everything',
+    onOk: () => { localStorage.removeItem(SAVE_KEY); ui.erasing = true; location.reload(); },
+  });
+});
+$('oVersion').textContent = 'Deep Bloom v0.4';
 $('musicStyle').addEventListener('change', () => { S.audio.musicStyle = $('musicStyle').value; syncSettings(); save(); });
 $('sfxStyle').addEventListener('change', () => { S.audio.sfxStyle = $('sfxStyle').value; syncSettings(); Sound.milestone(); save(); });
 VOL_INPUTS.forEach(([id, key]) => $(id).addEventListener('input', () => {
@@ -614,8 +692,16 @@ function showModal({ title, body, ok, cancel = 'Cancel', onOk, eyebrow = '', sto
   $('modal').hidden = false;
   $('mOk').onclick = () => { $('modal').hidden = true; if (onOk) onOk(); };
   $('mCancel').onclick = () => { $('modal').hidden = true; };
+  // Tapping outside acts like Cancel, or like OK when OK only closes. Modals that force an
+  // action (the full tide) stay open until their button is pressed.
+  ui.modalOutside = cancel !== null ? $('mCancel') : onOk ? null : $('mOk');
   $('mOk').focus();
 }
+
+// Tap the dimmed area around a sheet to close it, same as its close button.
+[['settings', () => $('sDone')], ['wheel', () => $('wClose')], ['modal', () => ui.modalOutside]].forEach(([id, btn]) => {
+  $(id).addEventListener('click', (e) => { if (e.target === $(id) && btn()) btn().click(); });
+});
 
 // ---- Creatures screen ------------------------------------------------------
 document.querySelectorAll('#buySeg button').forEach((b) => b.addEventListener('click', () => {
@@ -628,10 +714,10 @@ function buildCreatures() {
   const list = $('creatureList');
   list.innerHTML = '';
   ui.rows = [];
-  $('creaturesTitle').textContent = isKelp() ? 'Garden upgrades' : isEmber() ? 'Tower guide' : 'Creatures';
+  $('creaturesTitle').textContent = isUnbloom() ? 'Unbloom upgrades' : isKelp() ? 'Garden upgrades' : isEmber() ? 'Towers' : 'Creatures';
   $('buySeg').hidden = isKelp() || isEmber();
   $('creaturesNote').textContent = isKelp() ? 'Garden upgrades are bought with Jade sap and reset with the tide, just like the garden.'
-    : isEmber() ? 'Build and upgrade towers on the Defense tab. The tide washes them away, so each tide is a fresh defense.'
+    : isEmber() ? 'Pick 3 tower types to build on the Defense tab. More types unlock as your best wave grows. Upgrades and towers wash away with the tide.'
       : 'A creature doubles its output at Lv 5, 15, 100, 500 and 1,000. Upgrades reset with the tide; Pearl bonuses don\'t.';
   if (isKelp()) { buildGardenUps(list); return; }
   if (isEmber()) { buildTowerGuide(list); return; }
@@ -658,7 +744,7 @@ function updateCreatures() {
   document.querySelectorAll('#buySeg button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.mode === S.buyMode)));
   $('lumen2').textContent = fmt(S.lumen) + (isKelp() ? ' sap' : isEmber() ? ' Ash' : '');
   if (isKelp()) { updateGardenUps(); return; }
-  if (isEmber()) return;
+  if (isEmber()) { updateEmberUps(); return; }
   const gm = globalMult();
   ui.rows.forEach((r) => {
     const l = lvl(r.c.id);
@@ -676,13 +762,13 @@ function updateCreatures() {
 function pearlStatus(type) {
   const idx = PEARL_ORDER.indexOf(type);
   if (idx === S.zone) return 'current';
-  if (S.reachedEmber) return 'visitable';
-  return idx < S.zone ? 'past' : 'locked';
+  if (visiting() && stashedPearls(type)) return 'visitable';
+  return idx < S.zone || S.reachedEmber ? 'past' : 'locked';
 }
-const stashedPearls = (type) => {
+function stashedPearls(type) {
   const st = S.stash[ZONES[PEARL_ORDER.indexOf(type)].id];
   return st ? st.pearls : 0;
-};
+}
 function buildPearls() {
   const view = ui.pearlView || pearlType();
   const chips = $('pearlChips');
@@ -723,20 +809,20 @@ function buildPearls() {
   zl.innerHTML = '';
   ZONES.forEach((zz, i) => {
     let state, color = '#4C6E78', dim = true, action = '';
-    const goalText = (z) => (i === EMBER ? 'Finish the demo at ' : 'Descend at ') + fmt(z.goal) + ' ' + PEARLS[z.pearl].name;
-    if (i === S.zone) { state = visiting() ? 'Visiting' : 'You are here'; color = PEARLS[zz.pearl].color; dim = false; }
-    else if (S.reachedEmber) {
-      // From the Ember Wastes every zone can be revisited.
-      state = i === EMBER ? 'Home' : 'Ascend to visit';
-      color = PEARLS[zz.pearl].color; dim = false;
-      action = `<button type="button" class="btn small-btn visit-btn" data-zone="${i}">${i === EMBER ? 'Return' : 'Ascend'}</button>`;
+    const up = S.zone === EMBER || S.ascent;
+    const goalText = (z) => (up ? (i === 0 ? 'Ascend here to finish the demo at ' : 'Ascend at ') : 'Descend at ') + fmt(z.goal) + ' ' + PEARLS[z.pearl].name;
+    if (i === S.zone) { state = visiting() ? 'Visiting' : S.ascent >= 3 ? 'Demo complete' : 'You are here'; color = PEARLS[zz.pearl].color; dim = false; }
+    else if (visiting() && i === EMBER) {
+      state = 'Home'; color = PEARLS[zz.pearl].color; dim = false;
+      action = `<button type="button" class="btn small-btn visit-btn" data-zone="${i}">Return</button>`;
     }
-    else if (i < S.zone) { state = 'Left behind'; }
-    else if (i === S.zone + 1) { state = goalText(zone()); color = PEARLS[zz.pearl].color; dim = false; }
-    else { state = 'Locked'; }
+    else if (up && i === S.zone - 1 && S.ascent < 3) { state = goalText(zone()); color = PEARLS[zz.pearl].color; dim = false; }
+    else if (!up && i === S.zone + 1) { state = goalText(zone()); color = PEARLS[zz.pearl].color; dim = false; }
+    else if (up ? i > S.zone : i < S.zone) { state = 'Left behind'; }
+    else { state = up ? 'Ahead, on the way up' : 'Locked'; }
     const row = document.createElement('div');
     row.className = 'zone' + (dim ? ' dim' : '');
-    row.innerHTML = `<div class="rail"><i style="background:${color}"></i><s></s></div><div class="zt"><div><b>${zz.name}</b><em style="color:${color}">${state}</em></div><span>${zz.rule} Drops ${PEARLS[zz.pearl].name} Pearls. Goal: ${fmt(zz.goal)}.</span></div>${action}`;
+    row.innerHTML = `<div class="rail"><i style="background:${color}"></i><s></s></div><div class="zt"><div><b>${zz.name}</b><em style="color:${color}">${state}</em></div><span>${zoneRule(zz, i)} Drops ${PEARLS[zz.pearl].name} Pearls. Goal: ${fmt(zz.goal)}.</span></div>${action}`;
     zl.appendChild(row);
   });
   zl.querySelectorAll('.visit-btn').forEach((b) => b.addEventListener('click', () => visitZone(Number(b.dataset.zone))));
@@ -772,11 +858,19 @@ function updatePearls() {
     $('dTitle').textContent = 'Return to the Ember Wastes';
     $('dCount').textContent = 'Visiting';
     $('dBody').textContent = `You're visiting the past. Everything you earn here is kept. Return whenever you like.`;
-  } else if (S.zone === EMBER) {
+  } else if (S.ascent >= 3) {
     btn.disabled = true;
-    $('dTitle').textContent = 'The end of the demo';
-    $('dCount').textContent = fmt(S.zoneEarned) + ' / ' + fmt(END_GOAL);
-    $('dBody').textContent = 'Earn 1 trillion Ember Pearls to finish the Deep Bloom demo. Ascend to any earlier zone from the list below.';
+    $('dTitle').textContent = 'Back in the Shallows';
+    $('dCount').textContent = 'Demo complete';
+    $('dBody').textContent = 'You climbed all the way back up. Thank you for playing the Deep Bloom demo.';
+  } else if (S.zone === EMBER || S.ascent) {
+    const up = ZONES[S.zone - 1];
+    btn.disabled = !canAscend();
+    $('dTitle').textContent = 'Ascend to the ' + up.name;
+    $('dCount').textContent = canAscend() ? 'Ready' : fmt(S.zoneEarned) + ' / ' + fmt(zone().goal);
+    $('dBody').textContent = up.id === 'shallows'
+      ? `The last climb: reach the Shallows to finish the demo. Your ${PEARLS[cur].name} Pearls and their upgrades are left behind.`
+      : `One way, back up: ${up.ascentRule} Your ${PEARLS[cur].name} Pearls and their upgrades are left behind. You gain a Depth Mark: ×${BAL.depthMult} to all Lumen and Pearls.`;
   } else {
     btn.disabled = !canDescend();
     $('dTitle').textContent = 'Descend to the ' + next.name;
@@ -786,6 +880,18 @@ function updatePearls() {
 }
 $('descendBtn').addEventListener('click', () => {
   if (visiting()) { visitZone(EMBER); return; }
+  if (canAscend()) {
+    const up = ZONES[S.zone - 1];
+    showModal({
+      title: 'Ascend to the ' + up.name + '?',
+      body: up.id === 'shallows'
+        ? 'The sea is nearly healed. Climb back to the Shallows to finish the demo.'
+        : `This is one way. Your ${PEARLS[pearlType()].name} Pearls and their upgrades are left behind. ${up.ascentRule}`,
+      ok: 'Ascend',
+      onOk: ascend,
+    });
+    return;
+  }
   if (!canDescend()) return;
   const next = ZONES[S.zone + 1];
   showModal({
@@ -818,7 +924,7 @@ function updateTide() {
     + `Each bar fill is worth ${fmt(pearlsPerFill())} Pearls this tide, and more every tide you call here.`;
   $('callTide').disabled = gain < 1;
   $('descendLabel').textContent = visiting() ? 'Visiting: ' + pt.name + ' Pearls earned'
-    : S.zone === EMBER ? 'Ember Pearls to finish the demo' : pt.name + ' Pearls to descend';
+    : S.ascent >= 3 ? 'Demo complete' : S.zone === EMBER || S.ascent ? pt.name + ' Pearls to ascend' : pt.name + ' Pearls to descend';
   $('descendCount').textContent = fmt(S.zoneEarned) + ' / ' + fmt(zone().goal);
   $('descendBar').style.width = Math.min(100, S.zoneEarned / zone().goal * 100) + '%';
 }
@@ -862,7 +968,10 @@ function applyZone() {
   Sound.setZone(zone().id);
   $('seed').hidden = true;
   $('tabHome').textContent = isKelp() ? 'Garden' : isTrench() ? 'Battle' : isEmber() ? 'Defense' : 'Reef';
-  $('tabSecond').textContent = isKelp() ? 'Upgrades' : isTrench() ? 'Gear' : isEmber() ? 'Towers' : 'Creatures';
+  $('tabSecond').textContent = isKelp() ? 'Upgrades' : isEmber() ? 'Towers' : 'Creatures';
+  // The Trench has no second screen of its own; gear already lives under Dive/Gear.
+  $('tabSecond').closest('button').hidden = isTrench();
+  document.querySelector('.tabs').classList.toggle('four', isTrench());
   ui.emberDirty = true;
   ui.gardenDirty = true;
   ui.battleDirty = true;
@@ -1172,11 +1281,17 @@ function gearMult(slot) {
   const g = gearItem(S.gear.equipped[slot]);
   return g ? GEAR_RARITY[g.rarity].value : 1;
 }
-// Slot bonuses come from the Slot Wheel and belong to the slot, not the item.
+// Slot bonuses come from the Slot Wheel and belong to the slot, not the item. They add
+// to the equipped gear's value: Epic ×2.5 in a ×1.5 slot counts as ×3.
 const slotBonus = (slot) => S.gear.slotBonus[slot] || 1;
-const gearPower = (slot) => gearMult(slot) * slotBonus(slot);
+const slotAdd = (slot) => slotBonus(slot) - 1;
+const gearPower = (slot) => gearMult(slot) + slotAdd(slot);
 const fmtX = (v) => '×' + (v < 10 ? Math.round(v * 100) / 100 : Math.round(v * 10) / 10);
+const fmtAdd = (v) => '+' + (v < 10 ? Math.round(v * 100) / 100 : Math.round(v * 10) / 10);
 const gearStat = (g) => GEAR_SLOTS[g.slot].stat + ' ' + fmtX(GEAR_RARITY[g.rarity].value);
+// The equipped stat with the slot bonus added in, for the slot cards.
+const slotStat = (slot) => GEAR_SLOTS[slot].stat + ' ' + fmtX(gearPower(slot));
+const slotLine = (slot) => (slotAdd(slot) > 0 ? 'Slot ' + fmtAdd(slotAdd(slot)) : 'Slot +0');
 // A random piece of gear. Fills an empty slot automatically; with autoEquip it also
 // replaces a weaker piece (chests do, battle drops let the player choose).
 function rollGearItem(autoEquip) {
@@ -1207,45 +1322,65 @@ function equipGear(id) {
   S.gear.equipped[g.slot] = id;
   Sound.buy(); save(); ui.builtKey = ''; updateUI();
 }
+const dissolveShards = (g) => Math.round(GEAR_RARITY[g.rarity].shards * (1 + 0.5 * rank('shadow', 'shardfind')));
 function dissolveGear(id) {
   const g = gearItem(id);
   if (!g || S.gear.equipped[g.slot] === id) return;
   S.gear.items = S.gear.items.filter((x) => x.id !== id);
-  S.gear.shards += Math.round(GEAR_RARITY[g.rarity].shards * (1 + 0.5 * rank('shadow', 'shardfind')));
+  S.gear.shards += dissolveShards(g);
   ui.gearSel = null;
   Sound.click(); save(); ui.builtKey = ''; updateUI();
 }
 // ---- Slot Wheel ---------------------------------------------------------------
 // Stake shards to set the wheel's best value (1 → ×1, 10 → ×1.5, 20 → ×2 … max ×100),
 // spin, and the result binds to the slot. Big values are the thinnest slices, and the
-// slot keeps whichever bonus is higher, so a bad spin never makes it worse.
-const WHEEL = { perShard: 0.05, max: 100, slices: 8 };
-const wheelTop = (stake) => Math.min(WHEEL.max, 1 + WHEEL.perShard * stake);
-const maxStake = () => Math.min(S.gear.shards, Math.ceil((WHEEL.max - 1) / WHEEL.perShard));
+// slot keeps whichever bonus is higher, so a bad spin never makes it worse. Two prize
+// slices pay out sunken chests or the zone's Pearls instead, both growing with the stake.
+const WHEEL = { perShard: 0.05, max: 100, slices: 8, prizeWeight: 4 };
+// Wheel upgrades are bought with shards and kept forever, like gear.
+const WHEEL_UPS = [
+  { id: 'reach', name: 'Long reach', desc: 'Each shard adds +0.01 more to the top value', base: 15, growth: 2.5, max: 5 },
+  { id: 'tilt', name: 'Weighted rim', desc: 'Big-value slices are 20% wider', base: 20, growth: 2.5, max: 5 },
+  { id: 'prize', name: 'Prize pockets', desc: 'Chest and Pearl slices are wider', base: 25, growth: 2.5, max: 4 },
+  { id: 'bounty', name: 'Rich pockets', desc: 'Chest and Pearl prizes ×1.5', base: 30, growth: 3, max: 5 },
+  { id: 'bounce', name: 'Lucky bounce', desc: '10% chance to get your shards back', base: 40, growth: 3, max: 5 },
+];
+const wUp = (id) => (S.gear.wheelUp && S.gear.wheelUp[id]) || 0;
+const wheelUpCost = (u) => Math.round(u.base * Math.pow(u.growth, wUp(u.id)));
+const wheelPerShard = () => WHEEL.perShard + 0.01 * wUp('reach');
+const wheelChests = (stake) => Math.round((1 + Math.floor(stake / 25)) * Math.pow(1.5, wUp('bounty')));
+const wheelPearls = (stake) => Math.max(1, Math.round(pearlsPerFill() * (1 + stake / 10) * Math.pow(1.5, wUp('bounty'))));
+const wheelTop = (stake) => Math.min(WHEEL.max, 1 + wheelPerShard() * stake);
+const maxStake = () => Math.min(S.gear.shards, Math.ceil((WHEEL.max - 1) / wheelPerShard()));
 function wheelSlices(stake) {
   const top = wheelTop(stake);
   const n = WHEEL.slices;
-  const weights = Array.from({ length: n }, (_, i) => n - i);   // ×1 widest … top value thinnest
-  const total = weights.reduce((a, b) => a + b, 0);
+  // ×1 widest … top value thinnest, with the chest and Pearl slices mixed in.
+  const list = Array.from({ length: n }, (_, i) => ({ kind: 'bonus', value: 1 + (top - 1) * i / (n - 1), weight: (n - i) * (1 + 0.2 * wUp('tilt') * i / (n - 1)), color: WHEEL_COLORS[i] }));
+  const prize = WHEEL.prizeWeight + wUp('prize');
+  list.splice(2, 0, { kind: 'chest', weight: prize, color: '#E8A15C' });
+  list.splice(6, 0, { kind: 'pearls', weight: prize, color: '#F2F7FF' });
+  const total = list.reduce((a, s) => a + s.weight, 0);
   let a = 0;
-  return weights.map((w, i) => {
-    const span = (w / total) * 360;
-    const s = { value: 1 + (top - 1) * i / (n - 1), start: a, span, weight: w };
+  return list.map((s) => {
+    const span = (s.weight / total) * 360;
+    const out = { ...s, start: a, span };
     a += span;
-    return s;
+    return out;
   });
 }
 const WHEEL_COLORS = ['#B5C2DA', '#9DB8FF', '#6FB8FF', '#6FE3A5', '#C79BFF', '#FF8FD0', '#FFC46B', '#FFF3B0'];
+const sliceLabel = (s) => (s.kind === 'chest' ? 'Chest' : s.kind === 'pearls' ? 'Pearls' : fmtX(s.value));
 function drawWheel(stake) {
   const pt = (deg, r) => { const t = (deg - 90) * Math.PI / 180; return [Math.cos(t) * r, Math.sin(t) * r]; };
-  $('wheelSvg').innerHTML = wheelSlices(stake).map((s, i) => {
+  $('wheelSvg').innerHTML = wheelSlices(stake).map((s) => {
     const [x1, y1] = pt(s.start, 96);
     const [x2, y2] = pt(s.start + s.span, 96);
     const large = s.span > 180 ? 1 : 0;
     const mid = s.start + s.span / 2;
     const [tx, ty] = pt(mid, 66);
-    return `<path d="M0 0 L${x1} ${y1} A96 96 0 ${large} 1 ${x2} ${y2} Z" fill="${WHEEL_COLORS[i]}" stroke="#0B1026" stroke-width="1.5"/>
-      <text x="${tx}" y="${ty}" text-anchor="middle" dominant-baseline="middle" transform="rotate(${mid} ${tx} ${ty})">${fmtX(s.value)}</text>`;
+    return `<path d="M0 0 L${x1} ${y1} A96 96 0 ${large} 1 ${x2} ${y2} Z" fill="${s.color}" stroke="#0B1026" stroke-width="1.5"/>
+      <text x="${tx}" y="${ty}" text-anchor="middle" dominant-baseline="middle" transform="rotate(${mid} ${tx} ${ty})">${sliceLabel(s)}</text>`;
   }).join('') + '<circle r="14" fill="#0B1026" stroke="#FFC46B" stroke-width="3"/>';
 }
 function openWheel(slot) {
@@ -1266,11 +1401,27 @@ function syncWheel(resetStake) {
   stake.disabled = most < 1;
   $('wTitle').textContent = GEAR_SLOTS[slot].name + ' slot wheel';
   $('wShards').textContent = fmtInt(S.gear.shards) + ' shards';
-  $('wNow').textContent = `Slot bonus now ${fmtX(slotBonus(slot))}. It boosts any gear you put in the ${GEAR_SLOTS[slot].name} slot.`;
-  $('wStakeVal').textContent = most < 1 ? 'No shards: dissolve spare gear' : `${stake.value} → up to ${fmtX(wheelTop(Number(stake.value)))}`;
+  const st = Number(stake.value);
+  $('wNow').textContent = `Slot bonus now ${fmtAdd(slotAdd(slot))} (${fmtX(slotBonus(slot))}), added to any gear in the ${GEAR_SLOTS[slot].name} slot. Prize slices: ${wheelChests(st)} ${wheelChests(st) === 1 ? 'chest' : 'chests'} or ${fmtInt(wheelPearls(st))} ${PEARLS[pearlType()].name} Pearls.`;
+  $('wStakeVal').textContent = most < 1 ? 'No shards: dissolve spare gear' : `${stake.value} → up to ${fmtX(wheelTop(st))}`;
   $('wSpin').disabled = most < 1 || ui.spinning;
   if (!ui.spinning) drawWheel(Number(stake.value));
+  $('wUps').innerHTML = WHEEL_UPS.map((u) => {
+    const r = wUp(u.id), maxed = r >= u.max, cost = wheelUpCost(u);
+    return `<div class="wup"><div><b>${u.name}</b> <span class="small">${r}/${u.max}</span><span class="sub small">${u.desc}</span></div>
+      <button type="button" class="buy" data-up="${u.id}" ${maxed || S.gear.shards < cost || ui.spinning ? 'disabled' : ''}>${maxed ? 'Maxed' : cost + ' shards'}</button></div>`;
+  }).join('');
 }
+$('wUps').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-up]');
+  const u = b && WHEEL_UPS.find((x) => x.id === b.dataset.up);
+  if (!u || ui.spinning || wUp(u.id) >= u.max || S.gear.shards < wheelUpCost(u)) return;
+  S.gear.shards -= wheelUpCost(u);
+  S.gear.wheelUp = { ...(S.gear.wheelUp || {}), [u.id]: wUp(u.id) + 1 };
+  Sound.buy();
+  save();
+  syncWheel(false);
+});
 $('wStake').addEventListener('input', () => syncWheel(false));
 $('wClose').addEventListener('click', () => { if (!ui.spinning) $('wheel').hidden = true; });
 $('wSpin').addEventListener('click', () => {
@@ -1280,6 +1431,7 @@ $('wSpin').addEventListener('click', () => {
   let r = Math.random() * slices.reduce((a, s) => a + s.weight, 0);
   const hit = slices.find((s) => (r -= s.weight) < 0) || slices[0];
   S.gear.shards -= stake;
+  const bounced = Math.random() < 0.1 * wUp('bounce');
   ui.spinning = true;
   $('wSpin').disabled = true;
   $('wResult').textContent = 'Spinning…';
@@ -1293,7 +1445,19 @@ $('wSpin').addEventListener('click', () => {
   setTimeout(() => {
     const slot = ui.wheelSlot;
     const old = slotBonus(slot);
-    if (hit.value > old) {
+    if (hit.kind === 'chest') {
+      const n = wheelChests(stake);
+      S.gear.chests += n;
+      $('wResult').textContent = `${n} sunken ${n === 1 ? 'chest' : 'chests'}! Open ${n === 1 ? 'it' : 'them'} on the Gear screen.`;
+      $('wResult').className = 'center strong win';
+      Sound.milestone();
+    } else if (hit.kind === 'pearls') {
+      const n = wheelPearls(stake);
+      S.pearls += n;
+      $('wResult').textContent = `+${fmtInt(n)} ${PEARLS[pearlType()].name} Pearls!`;
+      $('wResult').className = 'center strong win';
+      Sound.milestone();
+    } else if (hit.value > old) {
       S.gear.slotBonus[slot] = hit.value;
       $('wResult').textContent = `${fmtX(hit.value)}! New ${GEAR_SLOTS[slot].name} slot bonus.`;
       $('wResult').className = 'center strong win';
@@ -1301,6 +1465,10 @@ $('wSpin').addEventListener('click', () => {
     } else {
       $('wResult').textContent = `${fmtX(hit.value)}: your slot keeps its ${fmtX(old)}.`;
       Sound.click();
+    }
+    if (bounced) {
+      S.gear.shards += stake;
+      $('wResult').textContent += ` Lucky bounce: ${stake} shards back!`;
     }
     ui.spinning = false;
     ui.battleDirty = true;
@@ -1320,14 +1488,13 @@ function buildGear(root) {
     return;
   }
   const G = S.gear;
-  const sel = gearItem(ui.gearSel) || gearItem(G.equipped.crown) || G.items[0];
+  const sel = gearItem(ui.gearSel) || G.items.find((g) => G.equipped[g.slot] !== g.id) || gearItem(G.equipped.crown);
   const slotTiles = Object.keys(GEAR_SLOTS).map((slot) => {
     const g = gearItem(G.equipped[slot]);
     const c = g ? GEAR_RARITY[g.rarity].color : '#4C6E78';
-    return `<div class="gslot-wrap"><button type="button" class="gslot" data-id="${g ? g.id : ''}" aria-pressed="${!!(g && sel && g.id === sel.id)}" style="--rc:${c}">
+    return `<div class="gslot-wrap"><button type="button" class="gslot" data-wheel="${slot}" aria-label="${GEAR_SLOTS[slot].name} slot: ${g ? g.name : 'empty'}. Open the slot wheel" style="--rc:${c}">
       <span class="gicon">${gearIcon(slot, c, 22)}</span>
-      <span class="gtext"><span class="label">${GEAR_SLOTS[slot].name}</span><b>${g ? g.name : 'Empty'}</b><span class="small" style="color:${c}">${g ? gearStat(g) : '—'}</span><span class="slot-bonus">Slot ${fmtX(slotBonus(slot))}</span></span></button>
-      <button type="button" class="wheel-link" data-wheel="${slot}">Spin ${GEAR_SLOTS[slot].name} wheel</button></div>`;
+      <span class="gtext"><span class="label">${GEAR_SLOTS[slot].name}</span><b>${g ? g.name : 'Empty'}</b><span class="small" style="color:${c}">${g || slotAdd(slot) > 0 ? slotStat(slot) : '—'}</span><span class="slot-bonus">${slotLine(slot)} · spin</span></span></button></div>`;
   }).join('');
   const inv = G.items.filter((g) => G.equipped[g.slot] !== g.id).sort((a, b) => b.rarity - a.rarity);
   const invTiles = inv.length ? inv.map((g) => {
@@ -1343,21 +1510,21 @@ function buildGear(root) {
     detail = `<div class="panel gdetail" style="--rc:${r.color}">
       <div class="row"><b>${sel.name}</b><span class="small strong" style="color:${r.color}">${r.name} ${GEAR_SLOTS[sel.slot].name}</span></div>
       <span class="sub">${gearStat(sel)} · ${cmp}</span>
-      ${isWorn ? '' : `<div class="two"><button type="button" id="gEquip" class="btn small-btn gear-btn">Equip</button><button type="button" id="gDissolve" class="btn">Dissolve +${r.shards}</button></div>`}
+      ${isWorn ? `<button type="button" class="btn small-btn gear-btn" data-wheel="${sel.slot}">Spin ${GEAR_SLOTS[sel.slot].name} wheel</button>` : `<div class="two"><button type="button" id="gEquip" class="btn small-btn gear-btn">Equip</button><button type="button" id="gDissolve" class="btn">Dissolve +${r.shards}</button></div>`}
     </div>`;
   }
   root.innerHTML = `
     <div class="panel"><div class="row"><b>Sunken chests</b><span class="small strong"><span id="chestCount"></span> · Shards ${fmtInt(G.shards)}</span></div>
       <button type="button" id="chestBtn" class="btn primary gear-btn">Open a chest</button>
       <span class="sub small">One chest with every tide in the Twilight Trench and deeper.</span></div>
-    <div class="label pad">Equipped</div>
+    <div class="label pad">Equipped · tap a slot to spin its wheel</div>
     <div class="gslots">${slotTiles}</div>
     <div class="label pad">Found · ${inv.length}</div>
     <div class="ggrid">${invTiles}</div>
     ${detail}`;
   $('chestBtn').addEventListener('click', openChest);
-  root.querySelectorAll('[data-wheel]').forEach((b) => b.addEventListener('click', () => openWheel(b.dataset.wheel)));
-  root.querySelectorAll('.gslot, .gitem').forEach((b) => b.addEventListener('click', () => {
+  root.querySelectorAll('[data-wheel]').forEach((b) => b.addEventListener('click', () => { Sound.click(); openWheel(b.dataset.wheel); }));
+  root.querySelectorAll('.gitem').forEach((b) => b.addEventListener('click', () => {
     if (!b.dataset.id) return;
     ui.gearSel = b.dataset.id; Sound.click(); ui.builtKey = ''; updateUI();
   }));
@@ -1392,33 +1559,104 @@ const GARDEN_UPS = [
   { id: 'spore', name: 'Swift current', desc: 'Spores arrive 15% faster', base: 50, growth: 3, max: 10, tint: '#6FE3A5' },
   { id: 'sap', name: 'Rich water', desc: 'All sap ×1.5', base: 200, growth: 4, tint: '#9BF0C2' },
   { id: 'auto', name: 'Tidy tide', desc: 'Merges a matching pair for you every few seconds', base: 1000, growth: 6, max: 5, tint: '#C8FFE0' },
+  { id: 'seed', name: 'Strong seeds', desc: '+10% chance a spore arrives as a Sprout', base: 400, growth: 4, max: 5, tint: '#4FB377' },
+  { id: 'drift', name: 'Double drift', desc: '+15% chance a second spore drifts in', base: 800, growth: 5, max: 5, tint: '#3F8F63' },
+  { id: 'lucky', name: 'Lucky merge', desc: '+6% chance a merge jumps up two tiers', base: 3000, growth: 6, max: 5, tint: '#FFC46B' },
+  { id: 'harvest', name: 'Merge harvest', desc: "Each merge pays 15s of the new plant's sap", base: 1500, growth: 5, tint: '#FF8FD0' },
+  { id: 'roots', name: 'Deep roots', desc: 'Kelp and taller (tier 4+) make ×2 sap', base: 20000, growth: 8, tint: '#C8FFE0' },
 ];
+// Unbloom (on the way back up): the bloom keeps spreading on its own; you split plants
+// back down and clear them. Clear water is what earns here, plus a payout for each split.
+const UNBLOOM_UPS = [
+  { id: 'calm', name: 'Still water', desc: 'The bloom spreads 15% slower', base: 50, growth: 3, max: 10, tint: '#6FE3A5' },
+  { id: 'clear', name: 'Clean water', desc: 'Clear plots make ×1.5 more', base: 200, growth: 4, tint: '#9BF0E0' },
+  { id: 'shears', name: 'Sharp shears', desc: 'Splitting a plant pays ×1.5 more', base: 400, growth: 4, tint: '#FFC46B' },
+  { id: 'graze', name: 'Grazing snails', desc: 'Split the tallest plant for you every few seconds', base: 1000, growth: 6, max: 5, tint: '#C8FFE0' },
+  { id: 'filter', name: 'Filter shrimp', desc: '+10% chance clearing a Spore also clears a neighbour', base: 1500, growth: 5, max: 5, tint: '#FF8FD0' },
+];
+const gardenUps = () => (isUnbloom() ? UNBLOOM_UPS : GARDEN_UPS);
 const gUp = (id) => S.garden.up[id] || 0;
-const sporeSecs = () => Math.max(1, 6 * Math.pow(0.85, gUp('spore')));
-const autoSecs = () => 12 / Math.max(1, gUp('auto'));
-function gardenRate() {
-  return S.garden.cells.reduce((s, t) => s + (t ? KELP[t].rate : 0), 0) * Math.pow(1.5, gUp('sap'))
-    * Math.pow(2, rank('jade', 'sapflow'));
+const sporeSecs = () => (isUnbloom() ? 5 * Math.pow(1.15, gUp('calm')) : Math.max(1, 6 * Math.pow(0.85, gUp('spore'))));
+const creepSecs = () => 9 * Math.pow(1.15, gUp('calm'));
+const unbloomMult = () => petMult('creatures') * globalMult();
+const splitPay = (t) => 10 * KELP[t].rate * Math.pow(1.5, gUp('shears')) * unbloomMult();
+function seedBloom() {
+  // The forest you left behind is choked with tall bloom.
+  S.garden.cells = S.garden.cells.map(() => (Math.random() < 0.8 ? 3 + Math.floor(Math.random() * 4) : 0));
 }
-function spawnSpore() {
-  const empty = S.garden.cells.map((t, i) => (t ? -1 : i)).filter((i) => i >= 0);
-  ui.nextSpore = Date.now() + sporeSecs() * 1000;
-  if (!empty.length) return false;
-  S.garden.cells[empty[Math.floor(Math.random() * empty.length)]] = Math.random() < 0.2 * rank('jade', 'sprouts') ? 2 : 1;
+function splitCell(i, to) {
+  const c = S.garden.cells;
+  const t = c[i];
+  if (!t) return false;
+  if (t === 1) {
+    c[i] = 0;
+    let extra = '';
+    if (Math.random() < 0.1 * gUp('filter')) {
+      const n = c.map((v, k) => (v === 1 && k !== i ? k : -1)).filter((k) => k >= 0)[0];
+      if (n !== undefined) { c[n] = 0; extra = ' The shrimp cleared another.'; }
+    }
+    earn(splitPay(1));
+    ui.gardenHint = 'Cleared a Spore. The water there runs clear.' + extra;
+    Sound.click();
+  } else {
+    const empty = c.map((v, k) => (v ? -1 : k)).filter((k) => k >= 0);
+    const dest = to !== undefined && !c[to] ? to : empty.length ? empty[Math.floor(Math.random() * empty.length)] : -1;
+    if (dest < 0) { ui.gardenHint = 'No room to split: clear a Spore first.'; Sound.click(); return false; }
+    c[i] = t - 1;
+    c[dest] = t - 1;
+    ui.justMerged = dest;
+    earn(splitPay(t));
+    ui.gardenHint = `Split the ${KELP[t].name} into two ${KELP[t - 1].name}s. +${fmt(splitPay(t))} sap.`;
+    if (t >= 5) Sound.milestone(); else Sound.buy();
+  }
+  ui.gardenSel = -1;
   ui.gardenDirty = true;
   return true;
 }
+function splitTallest() {
+  const c = S.garden.cells;
+  const top = Math.max(...c);
+  if (!top) return false;
+  return splitCell(c.indexOf(top));
+}
+const autoSecs = (id = 'auto') => 12 / Math.max(1, gUp(id));
+const plantRate = (t) => KELP[t].rate * (t >= 4 ? Math.pow(2, gUp('roots')) : 1);
+function gardenRate() {
+  if (isUnbloom()) return S.garden.cells.filter((t) => !t).length * 60 * Math.pow(1.5, gUp('clear')) * Math.pow(2, rank('jade', 'sapflow'));
+  return S.garden.cells.reduce((s, t) => s + (t ? plantRate(t) : 0), 0) * Math.pow(1.5, gUp('sap'))
+    * Math.pow(2, rank('jade', 'sapflow'));
+}
+function spawnSpore() {
+  ui.nextSpore = Date.now() + sporeSecs() * 1000;
+  const count = Math.random() < 0.15 * gUp('drift') ? 2 : 1;
+  let placed = 0;
+  for (let n = 0; n < count; n++) {
+    const empty = S.garden.cells.map((t, i) => (t ? -1 : i)).filter((i) => i >= 0);
+    if (!empty.length) break;
+    const sprout = Math.random() < 0.2 * rank('jade', 'sprouts') + 0.1 * gUp('seed');
+    S.garden.cells[empty[Math.floor(Math.random() * empty.length)]] = sprout ? 2 : 1;
+    placed++;
+  }
+  if (placed) ui.gardenDirty = true;
+  return placed > 0;
+}
 function mergeCells(from, to) {
   const c = S.garden.cells;
-  c[to] += 1;
+  const lucky = c[to] + 2 < KELP.length && Math.random() < 0.06 * gUp('lucky');
+  c[to] += lucky ? 2 : 1;
   c[from] = 0;
   ui.gardenSel = -1;
   ui.justMerged = to;
-  ui.gardenHint = 'Merged into ' + KELP[c[to]].name + '!';
+  ui.gardenHint = (lucky ? 'Lucky! Jumped to ' : 'Merged into ') + KELP[c[to]].name + '!';
+  if (gUp('harvest')) {
+    const raw = c.reduce((sum, t) => sum + (t ? plantRate(t) : 0), 0);
+    earn(15 * gUp('harvest') * ratePerSec() * plantRate(c[to]) / raw);
+  }
   if (c[to] >= 4) Sound.milestone(); else Sound.buy();
   ui.gardenDirty = true;
 }
 function tapCell(i) {
+  if (isUnbloom()) { splitCell(i); return; }
   const c = S.garden.cells;
   const sel = ui.gardenSel ?? -1;
   ui.gardenDirty = true;
@@ -1427,16 +1665,30 @@ function tapCell(i) {
   if (c[sel] === c[i] && c[i] < KELP.length - 1) mergeCells(sel, i);
   else { ui.gardenSel = i; Sound.click(); }
 }
-function autoMerge() {
+function autoMerge(creep) {
   const c = S.garden.cells;
   for (let t = 1; t < KELP.length - 1; t++) {
     const idx = c.map((v, i) => (v === t ? i : -1)).filter((i) => i >= 0);
-    if (idx.length >= 2) { mergeCells(idx[0], idx[1]); return; }
+    if (idx.length >= 2) {
+      if (creep) { c[idx[1]] += 1; c[idx[0]] = 0; ui.justMerged = idx[1]; ui.gardenHint = 'The bloom crept back: two plants grew together.'; ui.gardenDirty = true; }
+      else mergeCells(idx[0], idx[1]);
+      return;
+    }
   }
 }
 function gardenTick(now) {
   if (!ui.nextSpore) ui.nextSpore = now + sporeSecs() * 1000;
   if (now >= ui.nextSpore) spawnSpore();
+  if (isUnbloom()) {
+    // The bloom creeps back by merging on its own; grazers split it down for you.
+    if (!ui.nextCreep) ui.nextCreep = now + creepSecs() * 1000;
+    if (now >= ui.nextCreep) { autoMerge(true); ui.nextCreep = now + creepSecs() * 1000; }
+    if (gUp('graze')) {
+      if (!ui.nextGraze) ui.nextGraze = now + autoSecs('graze') * 1000;
+      if (now >= ui.nextGraze) { splitTallest(); ui.nextGraze = now + autoSecs('graze') * 1000; }
+    }
+    return;
+  }
   if (gUp('auto')) {
     if (!ui.nextAutoMerge) ui.nextAutoMerge = now + autoSecs() * 1000;
     if (now >= ui.nextAutoMerge) { autoMerge(); ui.nextAutoMerge = now + autoSecs() * 1000; }
@@ -1453,24 +1705,78 @@ function renderGarden() {
 }
 $('gardenGrid').addEventListener('click', (e) => {
   const b = e.target.closest('.gcell');
+  if (ui.dragDone) { ui.dragDone = false; return; }
   if (b) { tapCell(Number(b.dataset.i)); updateUI(); }
 });
+
+// Drag a plant onto a matching one to merge, or onto an empty plot to move it there.
+// A tap still selects, so tap-tap merging keeps working.
+let drag = null;
+$('gardenGrid').addEventListener('pointerdown', (e) => {
+  const b = e.target.closest('.gcell');
+  if (drag || !b || !S.garden.cells[Number(b.dataset.i)]) return;
+  drag = { from: Number(b.dataset.i), tier: S.garden.cells[Number(b.dataset.i)], x: e.clientX, y: e.clientY, id: e.pointerId, ghost: null, src: b };
+});
+window.addEventListener('pointermove', (e) => {
+  if (!drag || e.pointerId !== drag.id) return;
+  if (!drag.ghost) {
+    if (Math.hypot(e.clientX - drag.x, e.clientY - drag.y) < 8) return;
+    drag.ghost = drag.src.cloneNode(true);
+    drag.ghost.className = 'gcell full gdrag';
+    drag.ghost.style.width = drag.src.offsetWidth + 'px';
+    document.body.appendChild(drag.ghost);
+    drag.src.classList.add('lifted');
+  }
+  drag.ghost.style.left = e.clientX - drag.ghost.offsetWidth / 2 + 'px';
+  drag.ghost.style.top = e.clientY - drag.ghost.offsetHeight / 2 + 'px';
+  const over = document.elementFromPoint(e.clientX, e.clientY)?.closest('.gcell:not(.gdrag)');
+  document.querySelectorAll('.gcell.target').forEach((c) => c !== over && c.classList.remove('target'));
+  if (over && Number(over.dataset.i) !== drag.from) over.classList.add('target');
+});
+function endDrag(e) {
+  if (!drag || e.pointerId !== drag.id) return;
+  const d = drag;
+  drag = null;
+  if (!d.ghost) return;
+  d.ghost.remove();
+  ui.dragDone = true;
+  setTimeout(() => { ui.dragDone = false; }, 0);
+  const over = e.type === 'pointerup' && document.elementFromPoint(e.clientX, e.clientY)?.closest('#gardenGrid .gcell');
+  const c = S.garden.cells;
+  ui.gardenDirty = true;
+  if (!over || c[d.from] !== d.tier) { updateUI(); return; }
+  const to = Number(over.dataset.i);
+  if (to === d.from) { updateUI(); return; }
+  if (isUnbloom()) { if (!c[to]) splitCell(d.from, to); updateUI(); return; }
+  if (c[to] === d.tier && d.tier < KELP.length - 1) mergeCells(d.from, to);
+  else if (!c[to]) { c[to] = d.tier; c[d.from] = 0; ui.gardenSel = -1; Sound.click(); }
+  else { [c[to], c[d.from]] = [c[d.from], c[to]]; ui.gardenSel = -1; Sound.click(); }
+  updateUI();
+}
+window.addEventListener('pointerup', endDrag);
+window.addEventListener('pointercancel', endDrag);
 $('catchSpore').addEventListener('click', () => {
+  if (isUnbloom()) { if (!splitTallest()) ui.gardenHint = 'The water is clear. The bloom will try to drift back.'; updateUI(); return; }
   ui.gardenHint = spawnSpore() ? 'A spore drifted in on the current.' : 'The garden is full: merge plants to make room.';
   Sound.click();
   updateUI();
 });
 function updateGarden() {
   $('gSap').textContent = fmt(S.lumen);
-  $('gRate').textContent = '+' + fmt(ratePerSec()) + ' sap per second';
+  $('gRate').textContent = '+' + fmt(ratePerSec()) + ' sap per second' + (isUnbloom() ? ' from clear water' : '');
+  $('catchSpore').textContent = isUnbloom() ? 'Split the tallest' : 'Catch a spore';
+  $('sporeLabel').textContent = isUnbloom() ? 'Bloom drifts back in' : 'Next spore on the current';
+  $('gModeLabel').textContent = isUnbloom() ? 'Kelp Forest · unbloom' : 'Kelp Forest · merge garden';
   $('gPearl').textContent = 'Jade Pearls: ' + fmtInt(S.pearls);
   const left = Math.max(0, (ui.nextSpore || Date.now()) - Date.now());
   $('sporeBar').style.width = Math.min(100, (1 - left / (sporeSecs() * 1000)) * 100) + '%';
-  $('gHint').textContent = ui.gardenHint || 'Tap two matching plants to merge them into a taller one. Taller kelp makes more sap.';
+  $('gHint').textContent = ui.gardenHint || (isUnbloom()
+    ? 'Tap a plant to split it into two smaller ones (or drag it onto an empty plot). Tap a Spore to clear it. Clear water makes sap.'
+    : 'Drag a plant onto a matching one (or tap both) to merge them. Taller kelp makes more sap.');
   if (ui.gardenDirty) { renderGarden(); ui.gardenDirty = false; }
 }
 function buildGardenUps(list) {
-  ui.gardenRows = GARDEN_UPS.map((u) => {
+  ui.gardenRows = gardenUps().map((u) => {
     const row = document.createElement('div');
     row.className = 'crow';
     row.innerHTML = `<div class="sw" style="background:${u.tint}"></div>
@@ -1521,6 +1827,15 @@ const FOES = [
   { name: 'Frilled shark', color: '#6FB8FF' },
 ];
 const BOSS = { name: 'Abyss kraken', color: '#E58BFF' };
+// On the way back up the roles flip: your shoal drives the divers out.
+const HUMANS = [
+  { name: 'Scuba diver', color: '#FFC46B' }, { name: 'Harpoon hunter', color: '#FF6B6B' },
+  { name: 'Net trawler', color: '#B5C2DA' }, { name: 'Salvage drone', color: '#9DB8FF' },
+  { name: 'Drill sub', color: '#FF8A5C' },
+];
+const HUMAN_BOSS = { name: 'Factory ship', color: '#E58BFF' };
+const GUARDIAN_SVG = { diver: '', fish: '<path d="M10 52 C 22 22, 62 20, 74 50 C 62 78, 22 80, 10 52 Z" fill="#6FE3A5"/><path d="M74 50 L 88 36 L 86 52 L 88 66 Z" fill="#5CF2D6"/><circle cx="28" cy="46" r="5" fill="#04211C"/><path d="M40 58 C 46 54, 52 54, 58 58" fill="none" stroke="#04211C" stroke-width="2.5" stroke-linecap="round"/><path id="gCrown" d="M28 30 L 34 16 L 43 26 L 52 16 L 58 30" fill="none" stroke="#4C6E78" stroke-width="3" stroke-linejoin="round"/>' };
+const FOE_SVG = { fish: '', diver: '<path id="foeBody" d="M10 16 C 10 10, 50 8, 66 14 C 70 20, 66 26, 50 26 C 30 28, 12 24, 10 16 Z"/><path id="foeTail" d="M66 14 L 88 6 L 84 20 L 88 30 L 66 24 Z" opacity=".8"/><rect x="24" y="4" width="26" height="7" rx="3" fill="#4C6E78"/><circle cx="14" cy="15" r="6" fill="#9BF0E0" stroke="#050C1C" stroke-width="2"/><path d="M30 26 L 26 36 M44 26 L 46 36" stroke="#050C1C" stroke-width="3" stroke-linecap="round"/>' };
 // Rewards grow at the same pace as enemies (and only ×4 per tier vs ×8 for enemies), so
 // pushing further gets harder, not easier. Chests are rare; bosses always drop one.
 const BAT = { tierMult: 8, levelGrowth: 1.035, chestChance: 0.08, autoSecs: 2.5, winBase: 5000, winGrowth: 1.035, tierReward: 4 };
@@ -1532,7 +1847,20 @@ function stageLabel(b = S.battle) {
   return (b.diff ? tierOf(b.diff).name + ' ' : '') + b.wave + '-' + b.level;
 }
 const isBossStage = () => S.battle.level === 10;
-const foeOf = () => (isBossStage() ? BOSS : FOES[(S.battle.wave + S.battle.level) % FOES.length]);
+const foeOf = () => (isUprising() ? (isBossStage() ? HUMAN_BOSS : HUMANS[(S.battle.wave + S.battle.level) % HUMANS.length])
+  : isBossStage() ? BOSS : FOES[(S.battle.wave + S.battle.level) % FOES.length]);
+// Swap the arena art between the diver Guardian and the fish shoal.
+function syncArenaArt() {
+  const mode = isUprising() ? 'fish' : 'diver';
+  const g = $('guardian'), f = $('foe');
+  if (!GUARDIAN_SVG.diver) { GUARDIAN_SVG.diver = g.innerHTML; FOE_SVG.fish = f.innerHTML; }
+  if (g.dataset.mode === mode) return;
+  g.dataset.mode = mode;
+  g.innerHTML = GUARDIAN_SVG[mode];
+  f.innerHTML = FOE_SVG[mode === 'fish' ? 'diver' : 'fish'];
+  $('myName').textContent = mode === 'fish' ? 'Your shoal' : 'Your Guardian';
+  $('bZoneLabel').textContent = mode === 'fish' ? 'Trench uprising · ' : 'Twilight Trench · ';
+}
 // Gear has diminishing returns (powers below 1), so even Mythic gear with big slot
 // bonuses lifts you a few tiers, not straight to the end.
 function guardianPower() {
@@ -1629,6 +1957,18 @@ $('autoBtn').addEventListener('click', () => {
   updateUI();
 });
 $('bDrops').addEventListener('click', (e) => {
+  const d = e.target.closest('[data-dissolve]');
+  if (d) {
+    const g = gearItem(d.dataset.dissolve);
+    if (!g) return;
+    const n = dissolveShards(g);
+    dissolveGear(g.id);
+    ui.battleDrops = (ui.battleDrops || []).filter((x) => x.id !== g.id);
+    S.battle.log = 'Dissolved ' + g.name + ' into ' + n + (n === 1 ? ' shard.' : ' shards.');
+    ui.battleDirty = true;
+    updateUI();
+    return;
+  }
   const b = e.target.closest('[data-equip]');
   if (!b) return;
   equipGear(b.dataset.equip);
@@ -1638,6 +1978,7 @@ $('bDrops').addEventListener('click', (e) => {
   updateUI();
 });
 function renderBattle() {
+  syncArenaArt();
   const b = S.battle;
   const tier = tierOf(b.diff);
   const foe = foeOf();
@@ -1654,7 +1995,9 @@ function renderBattle() {
   $('foeTail').setAttribute('fill', foe.color);
   const crown = gearItem(S.gear.equipped.crown);
   $('gCrown').setAttribute('stroke', crown ? GEAR_RARITY[crown.rarity].color : '#4C6E78');
-  $('bLog').textContent = b.log || 'Your Guardian fights on its own with the gear below. Wins pay Lumen and can drop a sunken chest; the bubble opens more gear.';
+  $('bLog').textContent = b.log || (isUprising()
+    ? 'Your shoal is taking the trench back. Drive the divers out: wins pay Lumen and can drop the gear they stole.'
+    : 'Your Guardian fights on its own with the gear below. Wins pay Lumen and can drop a sunken chest; the bubble opens more gear.');
   $('bDrops').innerHTML = (ui.battleDrops || []).map((g) => {
     const r = GEAR_RARITY[g.rarity];
     const worn = gearItem(S.gear.equipped[g.slot]);
@@ -1664,13 +2007,14 @@ function renderBattle() {
     const cls = cmp === 'Better' || cmp === 'Equipped' ? 'jade' : cmp === 'Worse' ? 'red' : 'muted';
     return `<div class="drop"><span class="gicon" style="--rc:${r.color}">${gearIcon(g.slot, r.color, 18)}</span>
       <span class="dtext"><b>${g.name}</b><span class="small ${cls}">${r.name} · ${gearStat(g)} · ${cmp}</span></span>
-      ${!isWorn && r.value > wv ? `<button type="button" class="btn small-btn gear-btn" data-equip="${g.id}">Equip</button>` : ''}</div>`;
+      ${isWorn ? '' : r.value > wv ? `<button type="button" class="btn small-btn gear-btn" data-equip="${g.id}">Equip</button>`
+        : `<button type="button" class="btn small-btn" data-dissolve="${g.id}">Dissolve +${dissolveShards(g)}</button>`}</div>`;
   }).join('');
   $('bSlots').innerHTML = Object.keys(GEAR_SLOTS).map((slot) => {
     const g = gearItem(S.gear.equipped[slot]);
     const c = g ? GEAR_RARITY[g.rarity].color : '#4C6E78';
     return `<button type="button" class="bslot" data-slot="${slot}" style="--rc:${c}" aria-label="${GEAR_SLOTS[slot].name} slot: open the slot wheel"><span class="label">${GEAR_SLOTS[slot].name}</span><span class="gicon">${gearIcon(slot, c, 20)}</span>
-      <b>${g ? g.name : 'Empty'}</b><span class="small" style="color:${c}">${g ? gearStat(g) : '—'}</span><span class="slot-bonus">Slot ${fmtX(slotBonus(slot))} · spin</span></button>`;
+      <b>${g ? g.name : 'Empty'}</b><span class="small" style="color:${c}">${g || slotAdd(slot) > 0 ? slotStat(slot) : '—'}</span><span class="slot-bonus">${slotLine(slot)} · spin</span></button>`;
   }).join('');
   // Loser's health bar drains, then both refill for the next fight.
   $('myHp').style.width = ui.hpAnim === 'me' ? '0%' : '100%';
@@ -1705,7 +2049,30 @@ const TOWERS = {
   spout: { name: 'Water spout', short: 'Spout', cost: 2000, dmg: 3, range: 1.8, rate: 0.45, color: '#6FB8FF', desc: 'Fast single jets' },
   pump: { name: 'Coral pump', short: 'Pump', cost: 6000, dmg: 1, range: 1.5, rate: 0.8, color: '#5CF2D6', desc: 'Hits all nearby, slows fires' },
   cannon: { name: 'Tide cannon', short: 'Cannon', cost: 16000, dmg: 12, range: 2.4, rate: 1.6, color: '#C79BFF', desc: 'Slow, big splash' },
+  whale: { name: 'Whale spout', short: 'Whale', cost: 24000, dmg: 40, range: 4, rate: 2.6, color: '#9DB8FF', desc: 'Huge range, hits the strongest fire', unlock: 5 },
+  eel: { name: 'Eel coil', short: 'Eel', cost: 12000, dmg: 4, range: 2, rate: 0.9, color: '#FFE16B', desc: 'Jolt chains to 2 more fires', unlock: 10 },
+  frost: { name: 'Cold vent', short: 'Vent', cost: 9000, dmg: 0.5, range: 1.6, rate: 0.6, color: '#C8FFFF', desc: 'Nearby fires crawl at 40% speed', unlock: 15 },
+  clam: { name: 'Clam bank', short: 'Clam', cost: 20000, dmg: 0, range: 1.5, rate: 1, color: '#FF8FD0', desc: 'No attack: towers beside it hit 30% harder', unlock: 20 },
 };
+// You bring 3 tower types into the fight; more unlock as your best wave grows.
+const LOADOUT_SIZE = 3;
+const towerUnlocked = (k) => (S.ember.best || 0) >= (TOWERS[k].unlock || 0);
+const loadout = () => (S.ember.loadout || ['spout', 'pump', 'cannon']).filter((k) => TOWERS[k]);
+// Tower upgrades: bought with Ash and washed away by the tide, like the towers.
+const EMBER_UPS = [
+  { id: 'power', name: 'High pressure', desc: 'All towers ×1.4 damage', base: 4000, growth: 3 },
+  { id: 'rapid', name: 'Rapid valves', desc: 'Towers fire 8% faster', base: 5000, growth: 3, max: 5 },
+  { id: 'reach', name: 'Wide nozzles', desc: 'Tower range +10%', base: 6000, growth: 3, max: 5 },
+  { id: 'cheap', name: 'Driftwood frames', desc: 'Towers cost 8% less to build and upgrade', base: 3000, growth: 3, max: 5 },
+  { id: 'bounty', name: 'Ash sifting', desc: '+25% Ash from every fire', base: 8000, growth: 3.5 },
+  { id: 'wall', name: 'Reef wall', desc: '+5 reef health', base: 5000, growth: 2.5, max: 6 },
+  { id: 'salvage', name: 'Salvage crews', desc: 'Selling refunds +8% more', base: 2000, growth: 2.5, max: 5 },
+];
+const eUp = (id) => (S.ember.up && S.ember.up[id]) || 0;
+const emberUpCost = (u) => Math.ceil(u.base * Math.pow(u.growth, eUp(u.id)) * depthCost());
+const towerRange = (t) => TOWERS[t.type].range * (1 + 0.1 * eUp('reach'));
+const sellRate = () => 0.6 + 0.08 * eUp('salvage');
+const clamBoost = (t) => (S.ember.towers.some((o) => o.type === 'clam' && o !== t && Math.abs(o.c - t.c) <= 1 && Math.abs(o.r - t.r) <= 1) ? 1.3 : 1);
 const TD_MAX_LVL = 5;
 // Path cells and the walking line through their centres.
 const TD_CELLS = (() => {
@@ -1731,13 +2098,13 @@ function pathPoint(d) {
   const last = TD_PATH[TD_PATH.length - 1];
   return [last[0] + 0.5, last[1] + 0.5];
 }
-const emberMaxHp = () => 20 + 10 * rank('ember', 'firebreak');
+const emberMaxHp = () => 20 + 10 * rank('ember', 'firebreak') + 5 * eUp('wall');
 const depthCost = () => Math.pow(BAL.depthMult, S.depthMarks);
-const towerCost = (type, lvl = 0) => Math.ceil(TOWERS[type].cost * Math.pow(1.8, lvl) * depthCost());
-const towerDmg = (t) => TOWERS[t.type].dmg * Math.pow(1.7, t.lvl) * Math.pow(1.5, rank('ember', 'pressure'));
-const towerRate = (t) => TOWERS[t.type].rate * (1 - 0.12 * rank('ember', 'quick'));
+const towerCost = (type, lvl = 0) => Math.ceil(TOWERS[type].cost * Math.pow(1.8, lvl) * depthCost() * (1 - 0.08 * eUp('cheap')));
+const towerDmg = (t) => TOWERS[t.type].dmg * Math.pow(1.7, t.lvl) * Math.pow(1.5, rank('ember', 'pressure')) * Math.pow(1.4, eUp('power')) * clamBoost(t);
+const towerRate = (t) => TOWERS[t.type].rate * (1 - 0.12 * rank('ember', 'quick')) * (1 - 0.08 * eUp('rapid'));
 const fireHp = (w) => 10 * Math.pow(1.15, w - 1);
-const ashPerFire = (w) => 600 * Math.pow(1.12, w - 1) * globalMult(false) * Math.pow(1.5, rank('ember', 'ashsift'));
+const ashPerFire = (w) => 600 * Math.pow(1.12, w - 1) * globalMult(false) * Math.pow(1.5, rank('ember', 'ashsift')) * (1 + 0.25 * eUp('bounty'));
 
 function tdState() {
   if (!ui.td) ui.td = { fires: [], shots: [], toSpawn: 0, spawnIn: 0, between: 1.5, running: false, ashLog: [], sel: null, flash: 0 };
@@ -1809,8 +2176,9 @@ function emberTick(dt) {
   }
   // Move fires
   td.fires.forEach((f) => {
-    f.d += f.speed * (f.slow > 0 ? 0.6 : 1) * dt;
+    f.d += f.speed * (f.chill > 0 ? 0.4 : f.slow > 0 ? 0.6 : 1) * dt;
     f.slow = Math.max(0, f.slow - dt);
+    f.chill = Math.max(0, (f.chill || 0) - dt);
     f.flick += dt * 10;
     [f.x, f.y] = pathPoint(f.d);
   });
@@ -1826,14 +2194,32 @@ function emberTick(dt) {
     t.cd = (t.cd || 0) - dt;
     if (t.cd > 0) return;
     const spec = TOWERS[t.type];
+    if (t.type === 'clam') return;
     const cx = t.c + 0.5, cy = t.r + 0.5;
-    const inRange = td.fires.filter((f) => Math.hypot(f.x - cx, f.y - cy) <= spec.range);
+    const range = towerRange(t);
+    const inRange = td.fires.filter((f) => Math.hypot(f.x - cx, f.y - cy) <= range);
     if (!inRange.length) return;
     t.cd = towerRate(t);
     const dmg = towerDmg(t);
-    if (t.type === 'pump') {
-      inRange.forEach((f) => { f.hp -= dmg; f.slow = 1; });
-      td.shots.push({ kind: 'ring', x: cx, y: cy, r: spec.range, t: 0.3 });
+    if (t.type === 'pump' || t.type === 'frost') {
+      inRange.forEach((f) => { f.hp -= dmg; if (t.type === 'pump') f.slow = 1; else f.chill = 2; });
+      td.shots.push({ kind: 'ring', x: cx, y: cy, r: range, t: 0.3, color: spec.color });
+    } else if (t.type === 'whale') {
+      const target = inRange.reduce((a, b) => (b.hp > a.hp ? b : a));
+      target.hp -= dmg;
+      td.shots.push({ kind: 'jet', x1: cx, y1: cy, x2: target.x, y2: target.y, color: spec.color, t: 0.25, w: 6 });
+    } else if (t.type === 'eel') {
+      let from = { x: cx, y: cy };
+      const hit = [];
+      let target = inRange.reduce((a, b) => (b.d > a.d ? b : a));
+      for (let k = 0; k < 3 && target; k++) {
+        target.hp -= dmg * (k ? 0.7 : 1);
+        hit.push(target);
+        td.shots.push({ kind: 'jet', x1: from.x, y1: from.y, x2: target.x, y2: target.y, color: spec.color, t: 0.15 });
+        from = target;
+        const near = td.fires.filter((f) => !hit.includes(f) && Math.hypot(f.x - from.x, f.y - from.y) <= 1.5);
+        target = near.length ? near.reduce((a, b) => (Math.hypot(b.x - from.x, b.y - from.y) < Math.hypot(a.x - from.x, a.y - from.y) ? b : a)) : null;
+      }
     } else {
       const target = inRange.reduce((a, b) => (b.d > a.d ? b : a));
       if (t.type === 'cannon') {
@@ -1893,7 +2279,10 @@ function drawTD(dt) {
     ctx.beginPath(); ctx.arc(x, y, tile * 0.38, 0, Math.PI * 2); ctx.fill();
     ctx.fillStyle = spec.color;
     if (t.type === 'spout') { ctx.beginPath(); ctx.moveTo(x, y - tile * 0.26); ctx.quadraticCurveTo(x + tile * 0.22, y + tile * 0.05, x, y + tile * 0.2); ctx.quadraticCurveTo(x - tile * 0.22, y + tile * 0.05, x, y - tile * 0.26); ctx.fill(); }
-    else if (t.type === 'pump') { ctx.lineWidth = 4; ctx.strokeStyle = spec.color; ctx.beginPath(); ctx.arc(x, y, tile * 0.2, 0, Math.PI * 2); ctx.stroke(); }
+    else if (t.type === 'pump' || t.type === 'frost') { ctx.lineWidth = 4; ctx.strokeStyle = spec.color; ctx.beginPath(); ctx.arc(x, y, tile * 0.2, 0, Math.PI * 2); ctx.stroke(); if (t.type === 'frost') { ctx.beginPath(); ctx.moveTo(x - tile * 0.2, y); ctx.lineTo(x + tile * 0.2, y); ctx.moveTo(x, y - tile * 0.2); ctx.lineTo(x, y + tile * 0.2); ctx.stroke(); } }
+    else if (t.type === 'whale') { ctx.beginPath(); ctx.ellipse(x, y, tile * 0.26, tile * 0.15, 0, 0, Math.PI * 2); ctx.fill(); ctx.fillRect(x - tile * 0.04, y - tile * 0.3, tile * 0.08, tile * 0.16); }
+    else if (t.type === 'eel') { ctx.lineWidth = 4; ctx.strokeStyle = spec.color; ctx.beginPath(); ctx.moveTo(x - tile * 0.2, y + tile * 0.15); ctx.lineTo(x - tile * 0.05, y - tile * 0.15); ctx.lineTo(x + tile * 0.05, y + tile * 0.1); ctx.lineTo(x + tile * 0.2, y - tile * 0.2); ctx.stroke(); }
+    else if (t.type === 'clam') { ctx.beginPath(); ctx.arc(x, y + tile * 0.05, tile * 0.22, Math.PI, 0); ctx.fill(); ctx.fillRect(x - tile * 0.22, y + tile * 0.05, tile * 0.44, tile * 0.08); }
     else ctx.fillRect(x - tile * 0.18, y - tile * 0.18, tile * 0.36, tile * 0.36);
     for (let i = 0; i < t.lvl; i++) { ctx.fillStyle = '#FFC46B'; ctx.fillRect(x - tile * 0.3 + i * tile * 0.13, y + tile * 0.3, tile * 0.09, tile * 0.06); }
   });
@@ -1905,14 +2294,14 @@ function drawTD(dt) {
     g.addColorStop(0, '#FFF3B0'); g.addColorStop(0.45, f.boss ? '#FF4A2A' : '#FF9A5C'); g.addColorStop(1, 'rgba(255,74,42,0)');
     ctx.fillStyle = g;
     ctx.beginPath(); ctx.arc(x, y, size, 0, Math.PI * 2); ctx.fill();
-    if (f.slow > 0) { ctx.strokeStyle = 'rgba(92,242,214,.7)'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(x, y, size * 0.8, 0, Math.PI * 2); ctx.stroke(); }
+    if (f.slow > 0 || f.chill > 0) { ctx.strokeStyle = f.chill > 0 ? 'rgba(200,255,255,.9)' : 'rgba(92,242,214,.7)'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(x, y, size * 0.8, 0, Math.PI * 2); ctx.stroke(); }
     ctx.fillStyle = '#3A1A10'; ctx.fillRect(x - tile * 0.25, y - size - 6, tile * 0.5, 3);
     ctx.fillStyle = '#6FE3A5'; ctx.fillRect(x - tile * 0.25, y - size - 6, tile * 0.5 * Math.max(0, f.hp / f.max), 3);
   });
   // Water
   td.shots.forEach((s) => {
-    if (s.kind === 'jet') { ctx.strokeStyle = s.color; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(s.x1 * tile, s.y1 * tile); ctx.lineTo(s.x2 * tile, s.y2 * tile); ctx.stroke(); }
-    else if (s.kind === 'ring') { ctx.strokeStyle = `rgba(92,242,214,${s.t * 2})`; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(s.x * tile, s.y * tile, s.r * tile * (1 - s.t), 0, Math.PI * 2); ctx.stroke(); }
+    if (s.kind === 'jet') { ctx.strokeStyle = s.color; ctx.lineWidth = s.w || 3; ctx.beginPath(); ctx.moveTo(s.x1 * tile, s.y1 * tile); ctx.lineTo(s.x2 * tile, s.y2 * tile); ctx.stroke(); }
+    else if (s.kind === 'ring') { ctx.globalAlpha = Math.min(1, s.t * 2); ctx.strokeStyle = s.color || '#5CF2D6'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(s.x * tile, s.y * tile, s.r * tile * (1 - s.t), 0, Math.PI * 2); ctx.stroke(); ctx.globalAlpha = 1; }
     else { ctx.fillStyle = `rgba(157,184,255,${s.t * 1.6})`; ctx.beginPath(); ctx.arc(s.x * tile, s.y * tile, tile * (1.2 - s.t * 2), 0, Math.PI * 2); ctx.fill(); }
   });
   // Ash pops
@@ -1941,16 +2330,16 @@ function renderTdPanel() {
   }
   const t = S.ember.towers.find((x) => x.c === td.sel.c && x.r === td.sel.r);
   if (!t) {
-    panel.innerHTML = '<div class="tower-opts">' + Object.keys(TOWERS).map((k) => {
+    panel.innerHTML = '<div class="tower-opts">' + loadout().map((k) => {
       const s = TOWERS[k];
       return `<button type="button" class="tower-opt" data-build="${k}" style="border-color:${s.color}"><b style="color:${s.color}">${s.name}</b><span>${s.desc}</span><span class="tcost" data-cost="${k}"></span></button>`;
     }).join('') + '</div>';
   } else {
     const spec = TOWERS[t.type];
     const maxed = t.lvl >= TD_MAX_LVL - 1;
-    panel.innerHTML = `<div class="row"><b style="color:${spec.color}">${spec.name} · Lv ${t.lvl + 1}</b><span class="small muted">${fmt(towerDmg(t))} damage · every ${towerRate(t).toFixed(2)}s</span></div>
+    panel.innerHTML = `<div class="row"><b style="color:${spec.color}">${spec.name} · Lv ${t.lvl + 1}</b><span class="small muted">${t.type === 'clam' ? 'Boosts towers beside it' : fmt(towerDmg(t)) + ' damage · every ' + towerRate(t).toFixed(2) + 's'}</span></div>
       <div class="two"><button type="button" class="btn small-btn ember-btn" id="tUp" ${maxed ? 'disabled' : ''}>${maxed ? 'Max level' : 'Upgrade · ' + fmt(towerCost(t.type, t.lvl + 1))}</button>
-      <button type="button" class="btn" id="tSell">Sell · +${fmt(Math.floor(towerCost(t.type, t.lvl) * 0.6))}</button></div>`;
+      <button type="button" class="btn" id="tSell">Sell · +${fmt(Math.floor(towerCost(t.type, t.lvl) * sellRate()))}</button></div>`;
   }
 }
 $('tdPanel').addEventListener('click', (ev) => {
@@ -1970,7 +2359,7 @@ $('tdPanel').addEventListener('click', (ev) => {
     S.lumen -= cost; t.lvl += 1; Sound.milestone();
   }
   if (t && ev.target.closest('#tSell')) {
-    S.lumen += Math.floor(towerCost(t.type, t.lvl) * 0.6);
+    S.lumen += Math.floor(towerCost(t.type, t.lvl) * sellRate());
     S.ember.towers = S.ember.towers.filter((x) => x !== t);
     td.sel = null; Sound.click();
   }
@@ -2002,15 +2391,81 @@ function updateEmber() {
     el.closest('button').disabled = S.lumen < cost;
   });
 }
-// Second tab in the Ember Wastes: the tower guide.
+// Second tab in the Ember Wastes: pick 3 tower types, then buy tower upgrades with Ash.
 function buildTowerGuide(list) {
-  Object.values(TOWERS).forEach((s) => {
+  const lo = loadout();
+  const head = document.createElement('div');
+  head.className = 'row';
+  head.innerHTML = `<b>Your towers · pick ${LOADOUT_SIZE}</b><span class="small muted">${lo.length}/${LOADOUT_SIZE} chosen</span>`;
+  list.appendChild(head);
+  const grid = document.createElement('div');
+  grid.className = 'loadout';
+  grid.innerHTML = Object.keys(TOWERS).map((k) => {
+    const s = TOWERS[k], on = lo.includes(k), open = towerUnlocked(k);
+    return `<button type="button" class="lo-card${on ? ' on' : ''}" data-lo="${k}" aria-pressed="${on}" ${open ? '' : 'disabled'} style="--tc:${s.color}">
+      <b>${s.name}</b><span>${open ? s.desc : 'Unlocks at best wave ' + s.unlock}</span>${open && s.dmg ? `<span class="small muted">Dmg ${s.dmg} · range ${s.range} · ${s.rate}s</span>` : ''}</button>`;
+  }).join('');
+  list.appendChild(grid);
+  grid.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-lo]');
+    if (b) toggleLoadout(b.dataset.lo);
+  });
+  const up = document.createElement('div');
+  up.className = 'row';
+  up.innerHTML = '<b>Tower upgrades</b><span class="small muted">Reset with the tide</span>';
+  list.appendChild(up);
+  ui.emberRows = EMBER_UPS.map((u) => {
     const row = document.createElement('div');
     row.className = 'crow';
-    row.innerHTML = `<div class="sw" style="background:${s.color}"></div><div class="meta"><div class="nm"><b>${s.name}</b></div>
-      <div class="pk">${s.desc}. Damage ${s.dmg}, range ${s.range} tiles, fires every ${s.rate}s. Upgrades to Lv ${TD_MAX_LVL} (×1.7 damage each).</div></div>`;
+    row.innerHTML = `<div class="sw" style="background:#FF9A5C"></div>
+      <div class="meta"><div class="nm"><b>${u.name}</b><span></span></div><div class="pk">${u.desc}</div></div>
+      <button type="button" class="buy"><span class="m">Upgrade</span><span class="k"></span></button>`;
+    const btn = row.querySelector('.buy');
+    btn.addEventListener('click', () => buyEmberUp(u));
     list.appendChild(row);
+    return { u, row, btn, lv: row.querySelector('.nm span'), k: btn.querySelector('.k') };
   });
+}
+function toggleLoadout(k) {
+  const lo = loadout();
+  if (!towerUnlocked(k)) return;
+  if (tdState().running) { S.ember.log = 'Change your towers between waves.'; return; }
+  if (lo.includes(k)) {
+    if (lo.length <= 1) return;
+    // Built towers of a type you drop are refunded in full.
+    S.ember.towers.filter((t) => t.type === k).forEach((t) => { for (let l = 0; l <= t.lvl; l++) S.lumen += towerCost(t.type, l); });
+    S.ember.towers = S.ember.towers.filter((t) => t.type !== k);
+    S.ember.loadout = lo.filter((x) => x !== k);
+  } else {
+    if (lo.length >= LOADOUT_SIZE) return;
+    S.ember.loadout = lo.concat([k]);
+  }
+  tdState().sel = null;
+  Sound.click();
+  ui.emberDirty = true;
+  ui.builtKey = '';
+  save();
+  updateUI();
+}
+function updateEmberUps() {
+  (ui.emberRows || []).forEach(({ u, btn, lv, k }) => {
+    const r = eUp(u.id), maxed = u.max && r >= u.max;
+    lv.textContent = 'Rank ' + r + (u.max ? '/' + u.max : '');
+    k.textContent = maxed ? 'Maxed' : fmt(emberUpCost(u)) + ' Ash';
+    btn.disabled = maxed || S.lumen < emberUpCost(u);
+  });
+}
+function buyEmberUp(u) {
+  const r = eUp(u.id);
+  if ((u.max && r >= u.max) || S.lumen < emberUpCost(u)) return;
+  S.lumen -= emberUpCost(u);
+  S.ember.up = { ...(S.ember.up || {}), [u.id]: r + 1 };
+  if (u.id === 'wall') S.ember.hp += 5;
+  const row = ui.emberRows.find((x) => x.u === u);
+  if (row) { restartClass(row.row, 'lvlup'); floatText(row.row, 'Rank ' + (r + 1), false); }
+  Sound.buy();
+  save();
+  updateUI();
 }
 
 // ---- Visiting earlier zones (unlocked in the Ember Wastes) -------------------
@@ -2060,8 +2515,12 @@ const STORY = [
     text: "The fire isn't falling from the surface. It's rising from the deep.\n\nThe sea is fighting back, but not out of anger. It's trying to remember how it was before you: dark water, cold vents, creatures living by moonlight. The fire is it burning away everything that doesn't belong." },
   { id: 'truth', title: 'One spark', when: () => !!S.reachedEmber && S.ember.best >= 10,
     text: "You built towers to hold the fire back and protect your reef.\n\nBut every fire you snuff out is the sea trying to heal. The light, the bloom, the divers: all of it from one spark you never stopped feeding. The sea only wants to go back to what it was." },
-  { id: 'end', title: 'Choose', when: () => S.zone === EMBER && S.zoneEarned >= END_GOAL,
-    text: "A trillion Pearls. The sea has shown you what it was before you, and what it's fighting to become again.\n\nYou can keep the light burning, or let the tide run backwards and let the sea have its dark again, growing gently this time, knowing what it costs.\n\nEither way, I'll be here. I always am." },
+  { id: 'uprising', title: 'The trench rises', when: () => S.ascent >= 1,
+    text: "You put down the towers and let the fire guide you up.\n\nThe divers are still in the trench, and this time you swim with the fish. Every diver you drive out is a shell, a fin, an eye that gets to stay where it belongs." },
+  { id: 'unbloom', title: 'Unmaking the bloom', when: () => S.ascent >= 2,
+    text: "The forest is still choked with the bloom you grew.\n\nNo more merging. Pull it apart, plant by plant, until the water runs clear again. It will try to creep back. Keep going." },
+  { id: 'end', title: 'Choose', when: () => S.ascent >= 3,
+    text: "You're back in the Shallows, and the water is dark and quiet again. The sea has shown you what it was before you, and what it fought to become again.\n\nYou can keep the light low, or let the tide run backwards and start over, growing gently this time, knowing what it costs.\n\nEither way, I'll be here. I always am." },
 ];
 const storyActive = () => (S.stars || 0) > 0;
 const nextChapter = () => (storyActive() ? STORY.find((c) => !S.storySeen.includes(c.id) && c.when()) : null);
@@ -2087,13 +2546,13 @@ $('storyBtn').addEventListener('click', () => {
 
 // ---- The end of the demo ---------------------------------------------------------
 function checkEnding() {
-  if (S.zone === EMBER && !visiting() && S.zoneEarned >= END_GOAL && !S.demoDone && !ui.washing && !ui.endingOpen
+  if (S.ascent >= 3 && !visiting() && !S.demoDone && !ui.washing && !ui.endingOpen
     && $('modal').hidden && !nextChapter()) showEnding();
 }
 function showEnding() {
   ui.endingOpen = true;
   const stats = [
-    ['Tides called', fmtInt(S.tides)], ['Depth Marks', S.depthMarks],
+    ['Tides called', fmtInt(S.tides)], ['Depth Marks', S.depthMarks], ['Zones climbed', S.ascent || 0],
     ['Best Trench stage', stageLabel()], ['Best fire wave', S.ember.best],
     ['Pets hatched', S.pets.length], ['Gear found', S.gear.items.length],
     ['Lumen ever made', fmt(S.totalEarned)], ['Bloom Stars', S.stars || 0],
@@ -2101,7 +2560,7 @@ function showEnding() {
   $('endStats').innerHTML = stats.map(([k, v]) => `<div><b>${v}</b><span>${k}</span></div>`).join('');
   $('endText').textContent = storyActive()
     ? 'This time you remembered. The light, the bloom, the divers: you saw what every spark cost the sea, and that the fire was only the sea trying to heal.'
-    : 'The fires are out. You grew a reef from a single spark, all the way down to the Ember Wastes and a trillion Ember Pearls.';
+    : 'You grew a reef from a single spark, all the way down to the Ember Wastes, then climbed back up: driving out the divers, unmaking the bloom, and home to the Shallows.';
   $('ending').hidden = false;
   Sound.milestone();
   $('endKeep').focus();
@@ -2241,6 +2700,7 @@ function offlineCatchUp() {
 }
 
 S.audio = Object.assign(freshState().audio, S.audio);
+S.opts = Object.assign(freshState().opts, S.opts);
 syncSettings();
 applyZone();
 renderFish();
