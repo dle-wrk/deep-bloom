@@ -2040,7 +2040,7 @@ function visitZone(i) {
 // one chapter at a time as you reach each moment again.
 // The arc: White, your Lumen floods the dark sea with light. Jade, that light feeds a
 // bacterial bloom. Shadow, divers strip the creatures it drove deep, for gear. Ember, the
-// sea fights back.
+// sea fights back: not revenge, but trying to return to how it was before you.
 const STORY = [
   { id: 'wake', title: 'You remember', when: () => true,
     text: "You remember the fire. Then the tide ran backwards and the sea forgot.\n\nBut you didn't.\n\nI'm Echo, the oldest pearl in the reef. Only those who remember can hear me. This time, watch what your light does." },
@@ -2057,11 +2057,11 @@ const STORY = [
   { id: 'kraken', title: 'What the gear is made of', when: () => S.depthMarks >= 2 && (S.battle.wave > 1 || S.battle.diff > 0),
     text: "Your Guardian is a diver too.\n\nThe Angler Lure was an anglerfish. The Nautilus Plate was a nautilus. The Whalebone Shell was a whale. Every chest you open was something that lived. Every win empties the trench a little more." },
   { id: 'ember', title: 'The sea fights back', when: () => !!S.reachedEmber,
-    text: "The fire isn't falling from the surface. It's rising from the deep.\n\nThe vents have opened. The sea is boiling up against everything that took from it: the light, the bloom, the divers. This is the sea fighting back." },
+    text: "The fire isn't falling from the surface. It's rising from the deep.\n\nThe sea is fighting back, but not out of anger. It's trying to remember how it was before you: dark water, cold vents, creatures living by moonlight. The fire is it burning away everything that doesn't belong." },
   { id: 'truth', title: 'One spark', when: () => !!S.reachedEmber && S.ember.best >= 10,
-    text: "You built towers to hold the fire back and protect your reef.\n\nBut the reef is where it started. The light, the bloom, the divers, the fire: all of it from one spark you never stopped feeding." },
+    text: "You built towers to hold the fire back and protect your reef.\n\nBut every fire you snuff out is the sea trying to heal. The light, the bloom, the divers: all of it from one spark you never stopped feeding. The sea only wants to go back to what it was." },
   { id: 'end', title: 'Choose', when: () => S.zone === EMBER && S.zoneEarned >= END_GOAL,
-    text: "A trillion Pearls. The sea has said what it needed to say.\n\nYou can keep the light burning, or let the tide run backwards and grow gently this time, knowing what it costs.\n\nEither way, I'll be here. I always am." },
+    text: "A trillion Pearls. The sea has shown you what it was before you, and what it's fighting to become again.\n\nYou can keep the light burning, or let the tide run backwards and let the sea have its dark again, growing gently this time, knowing what it costs.\n\nEither way, I'll be here. I always am." },
 ];
 const storyActive = () => (S.stars || 0) > 0;
 const nextChapter = () => (storyActive() ? STORY.find((c) => !S.storySeen.includes(c.id) && c.when()) : null);
@@ -2100,7 +2100,7 @@ function showEnding() {
   ];
   $('endStats').innerHTML = stats.map(([k, v]) => `<div><b>${v}</b><span>${k}</span></div>`).join('');
   $('endText').textContent = storyActive()
-    ? 'This time you remembered. The light, the bloom, the divers, the fire: you saw what every spark cost the sea.'
+    ? 'This time you remembered. The light, the bloom, the divers: you saw what every spark cost the sea, and that the fire was only the sea trying to heal.'
     : 'The fires are out. You grew a reef from a single spark, all the way down to the Ember Wastes and a trillion Ember Pearls.';
   $('ending').hidden = false;
   Sound.milestone();
