@@ -630,7 +630,7 @@ function syncSettings() {
   const o = S.opts;
   $('oNumbers').value = o.numbers;
   $('oVibrate').checked = o.vibrate;
-  $('oVibrate').closest('label').hidden = !navigator.vibrate;
+  $('oVibrate').closest('label').hidden = !hapticsAvailable;
   $('oCalm').checked = o.calm;
   $('oPops').checked = o.pops;
   $('oAwake').checked = o.awake;
@@ -651,13 +651,44 @@ function keepAwake(on) {
   } else if (!on && wakeLock) { wakeLock.release(); wakeLock = null; }
 }
 document.addEventListener('visibilitychange', () => { if (S.opts.awake) keepAwake(true); });
-const buzz = (ms) => { if (S.opts.vibrate && navigator.vibrate) navigator.vibrate(ms); };
-['buy', 'milestone'].forEach((k) => {
+// Haptics. Android (and the APK) use navigator.vibrate. iPhones have no vibrate API, but
+// iOS 18+ plays a system haptic tick when a switch control is toggled, so a hidden switch
+// is clicked instead (only works from a tap, so idle events stay silent there).
+const canVibrate = typeof navigator.vibrate === 'function';
+const isIOS = /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+const iosTick = (() => {
+  if (canVibrate || !isIOS) return null;
+  const l = document.createElement('label');
+  l.setAttribute('aria-hidden', 'true');
+  l.style.cssText = 'position:fixed;left:-100px;top:0;width:1px;height:1px;overflow:hidden;opacity:0;pointer-events:none';
+  const i = document.createElement('input');
+  i.type = 'checkbox';
+  i.setAttribute('switch', '');
+  i.tabIndex = -1;
+  l.appendChild(i);
+  document.body.appendChild(l);
+  return l;
+})();
+const hapticsAvailable = canVibrate || !!iosTick;
+let lastBuzz = 0;
+function buzz(pattern) {
+  if (!S.opts.vibrate || !hapticsAvailable) return;
+  const now = performance.now();
+  if (now - lastBuzz < 45) return;
+  lastBuzz = now;
+  if (canVibrate) { navigator.vibrate(pattern); return; }
+  const ticks = Array.isArray(pattern) ? Math.ceil(pattern.length / 2) : 1;
+  iosTick.click();
+  for (let k = 1; k < ticks; k++) setTimeout(() => iosTick.click(), k * 90);
+}
+// Light ticks for taps and buys, stronger patterns for big moments.
+const HAPTICS = { tap: 6, buy: 12, perk: 18, milestone: [25, 40, 35], tide: [30, 60, 30, 60, 40], descend: [50, 80, 50] };
+Object.entries(HAPTICS).forEach(([k, pattern]) => {
   const play = Sound[k].bind(Sound);
-  Sound[k] = (...a) => { buzz(k === 'buy' ? 8 : [20, 40, 30]); return play(...a); };
+  Sound[k] = (...a) => { buzz(pattern); return play(...a); };
 });
 [['oVibrate', 'vibrate'], ['oCalm', 'calm'], ['oPops', 'pops'], ['oAwake', 'awake']].forEach(([id, key]) =>
-  $(id).addEventListener('change', () => { S.opts[key] = $(id).checked; if (key === 'vibrate') buzz(20); syncSettings(); save(); }));
+  $(id).addEventListener('change', () => { S.opts[key] = $(id).checked; if (key === 'vibrate') buzz(HAPTICS.buy); syncSettings(); save(); }));
 $('oNumbers').addEventListener('change', () => { S.opts.numbers = $('oNumbers').value; syncSettings(); save(); ui.builtKey = ''; updateUI(); });
 $('oReset').addEventListener('click', () => {
   $('settings').hidden = true;
@@ -668,7 +699,7 @@ $('oReset').addEventListener('click', () => {
     onOk: () => { localStorage.removeItem(SAVE_KEY); ui.erasing = true; location.reload(); },
   });
 });
-$('oVersion').textContent = 'Deep Bloom v0.4';
+$('oVersion').textContent = 'Deep Bloom v0.4.1';
 $('musicStyle').addEventListener('change', () => { S.audio.musicStyle = $('musicStyle').value; syncSettings(); save(); });
 $('sfxStyle').addEventListener('change', () => { S.audio.sfxStyle = $('sfxStyle').value; syncSettings(); Sound.milestone(); save(); });
 VOL_INPUTS.forEach(([id, key]) => $(id).addEventListener('input', () => {
@@ -717,7 +748,7 @@ function buildCreatures() {
   $('creaturesTitle').textContent = isUnbloom() ? 'Unbloom upgrades' : isKelp() ? 'Garden upgrades' : isEmber() ? 'Towers' : 'Creatures';
   $('buySeg').hidden = isKelp() || isEmber();
   $('creaturesNote').textContent = isKelp() ? 'Garden upgrades are bought with Jade sap and reset with the tide, just like the garden.'
-    : isEmber() ? 'Pick 3 tower types to build on the Defense tab. More types unlock as your best wave grows. Upgrades and towers wash away with the tide.'
+    : isEmber() ? 'Pick 3 tower types to build on the Defense tab; tapping a new one swaps out your oldest pick (built towers of that type are refunded). More types unlock as your best wave grows. Upgrades and towers wash away with the tide.'
       : 'A creature doubles its output at Lv 5, 15, 100, 500 and 1,000. Upgrades reset with the tide; Pearl bonuses don\'t.';
   if (isKelp()) { buildGardenUps(list); return; }
   if (isEmber()) { buildTowerGuide(list); return; }
@@ -2396,7 +2427,7 @@ function buildTowerGuide(list) {
   const lo = loadout();
   const head = document.createElement('div');
   head.className = 'row';
-  head.innerHTML = `<b>Your towers · pick ${LOADOUT_SIZE}</b><span class="small muted">${lo.length}/${LOADOUT_SIZE} chosen</span>`;
+  head.innerHTML = `<b>Your towers · pick ${LOADOUT_SIZE}</b><span class="small muted">${lo.length}/${LOADOUT_SIZE} chosen · tap to swap</span>`;
   list.appendChild(head);
   const grid = document.createElement('div');
   grid.className = 'loadout';
@@ -2429,15 +2460,20 @@ function buildTowerGuide(list) {
 function toggleLoadout(k) {
   const lo = loadout();
   if (!towerUnlocked(k)) return;
-  if (tdState().running) { S.ember.log = 'Change your towers between waves.'; return; }
+  // Built towers of a type you drop are refunded in full.
+  const drop = (d) => {
+    S.ember.towers.filter((t) => t.type === d).forEach((t) => { for (let l = 0; l <= t.lvl; l++) S.lumen += towerCost(t.type, l); });
+    S.ember.towers = S.ember.towers.filter((t) => t.type !== d);
+  };
   if (lo.includes(k)) {
     if (lo.length <= 1) return;
-    // Built towers of a type you drop are refunded in full.
-    S.ember.towers.filter((t) => t.type === k).forEach((t) => { for (let l = 0; l <= t.lvl; l++) S.lumen += towerCost(t.type, l); });
-    S.ember.towers = S.ember.towers.filter((t) => t.type !== k);
+    drop(k);
     S.ember.loadout = lo.filter((x) => x !== k);
+  } else if (lo.length >= LOADOUT_SIZE) {
+    // Full loadout: the new pick swaps out your oldest one.
+    drop(lo[0]);
+    S.ember.loadout = lo.slice(1).concat([k]);
   } else {
-    if (lo.length >= LOADOUT_SIZE) return;
     S.ember.loadout = lo.concat([k]);
   }
   tdState().sel = null;

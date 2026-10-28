@@ -1,7 +1,7 @@
 // Offline support for the installed web app. Game files are network-first (so an update
 // shows up the next time you open the game online) with the cache as the offline fallback.
 // Bump VERSION whenever game files change so the new build is cached fresh.
-const VERSION = 'deep-bloom-v6';
+const VERSION = 'deep-bloom-v7';
 const SHELL = ['./', 'index.html', 'style.css', 'audio.js', 'game.js', 'manifest.json',
   'icons/icon-192.png', 'icons/icon-512.png', 'icons/apple-touch-icon.png'];
 
