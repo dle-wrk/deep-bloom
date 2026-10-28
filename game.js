@@ -2,6 +2,9 @@
 
 // ---- Balance: tune here ----------------------------------------------------
 const SAVE_KEY = 'deepbloom-save-v1';
+// Bumping this wipes every player's progress once, on every device, the next time the game
+// loads (settings are kept). Demo v1 started everyone fresh.
+const RESET_EPOCH = 'demo-v1';
 const BAL = {
   pearlDiv: 4e4,          // bar fill n completes when holding pearlDiv × n² Lumen; Pearls = fills × bonuses
   tideSteps: 100,         // after this many bar fills the tide must be called
@@ -19,13 +22,13 @@ const MILESTONES = [5, 15, 100, 500, 1000];
 const MAX_POINTERS = 5;
 
 const CREATURES = [
-  { id: 'touch', name: 'Bright touch', perk: 'Tap power: +1 Lumen per tap per level', tint: '#E6F4F2', cost: 10, growth: 1.07, tap: true },
-  { id: 'polyp', name: 'Glow polyp', perk: 'Sparks a little Lumen, nonstop', tint: '#2ED3B7', cost: 15, growth: 1.15, rate: 0.5 },
-  { id: 'lantern', name: 'Lantern fish', perk: 'Harvests the brightest coral', tint: '#FFC46B', cost: 120, growth: 1.15, rate: 4 },
-  { id: 'jelly', name: 'Drift jelly', perk: 'Boosts every polyp it passes: +2% each', tint: '#FF8FD0', cost: 1400, growth: 1.14, rate: 28 },
-  { id: 'angler', name: 'Anglerfish', perk: 'Big, slow harvests', tint: '#8F7BFF', cost: 16000, growth: 1.13, rate: 230 },
-  { id: 'whale', name: 'Moon whale', perk: 'Sings the whole reef brighter', tint: '#9DB8FF', cost: 220000, growth: 1.12, rate: 2100 },
-  { id: 'titan', name: 'Coral titan', perk: 'An ancient reef that grows itself', tint: '#FF9A5C', cost: 3.5e6, growth: 1.12, rate: 19000 },
+  { id: 'touch', sym: 'Bt', name: 'Bright touch', perk: 'Tap power: +1 Lumen per tap per level', tint: '#E6F4F2', cost: 10, growth: 1.07, tap: true },
+  { id: 'polyp', sym: 'Gp', name: 'Glow polyp', perk: 'Sparks a little Lumen, nonstop', tint: '#2ED3B7', cost: 15, growth: 1.15, rate: 0.5 },
+  { id: 'lantern', sym: 'Lf', name: 'Lantern fish', perk: 'Harvests the brightest coral', tint: '#FFC46B', cost: 120, growth: 1.15, rate: 4 },
+  { id: 'jelly', sym: 'Dj', name: 'Drift jelly', perk: 'Boosts every polyp it passes: +2% each', tint: '#FF8FD0', cost: 1400, growth: 1.14, rate: 28 },
+  { id: 'angler', sym: 'An', name: 'Anglerfish', perk: 'Big, slow harvests', tint: '#8F7BFF', cost: 16000, growth: 1.13, rate: 230 },
+  { id: 'whale', sym: 'Mw', name: 'Moon whale', perk: 'Sings the whole reef brighter', tint: '#9DB8FF', cost: 220000, growth: 1.12, rate: 2100 },
+  { id: 'titan', sym: 'Ct', name: 'Coral titan', perk: 'An ancient reef that grows itself', tint: '#FF9A5C', cost: 3.5e6, growth: 1.12, rate: 19000 },
 ];
 
 // goal: zone Pearls earned to descend (Ember: to finish the demo).
@@ -75,7 +78,7 @@ const PERKS = {
   shadow: [
     { id: 'lasting', name: 'Battle hardened', desc: 'Guardian power ×1.25 per rank', base: 3, growth: 2.6 },
     { id: 'echo', name: 'Double strike', desc: 'Battle wins give ×2 Lumen, per rank', base: 5, growth: 3 },
-    { id: 'armory', name: 'Salvager', desc: '+4% chest chance per win, per rank', base: 8, growth: 3, max: 5 },
+    { id: 'armory', name: 'Salvager', desc: 'Treasure crabs show up 5% more often, per rank', base: 8, growth: 3, max: 5 },
     { id: 'shardfind', name: 'Shard sifter', desc: '+50% shards from dissolving, per rank', base: 6, growth: 2.6 },
     { id: 'eyes', name: 'Deep eyes', desc: '+25% offline earnings, per rank', base: 4, growth: 2.5, max: 4 },
     { id: 'abyss', name: 'Abyss call', desc: 'Shadow Pearls ×1.5 per rank', base: 10, growth: 2.8 },
@@ -85,7 +88,7 @@ const PERKS = {
     { id: 'quick', name: 'Quick pumps', desc: 'Towers fire 12% faster per rank', base: 6, growth: 3, max: 5 },
     { id: 'firebreak', name: 'Firebreak', desc: 'Your reef takes 10 more hits per rank', base: 3, growth: 2.2, max: 10 },
     { id: 'ashsift', name: 'Ash sifter', desc: 'Ash from snuffed fires ×1.5 per rank', base: 4, growth: 2.5 },
-    { id: 'cistern', name: 'Cistern', desc: 'Start each tide with double the starting Ash, +1× per rank', base: 5, growth: 2.5, max: 10 },
+    { id: 'cistern', name: 'Cistern', desc: 'Wave-clear Ash bonus +100% per rank', base: 5, growth: 2.5, max: 10 },
     { id: 'cinder', name: 'Cinder diver', desc: 'Ember Pearls ×1.5 per rank', base: 12, growth: 2.8 },
   ],
 };
@@ -94,6 +97,7 @@ const PEARL_ORDER = ['white', 'jade', 'shadow', 'ember'];
 // ---- State -----------------------------------------------------------------
 function freshState() {
   return {
+    epoch: RESET_EPOCH,
     lumen: 0, tideEarned: 0, totalEarned: 0, levels: {}, revealed: 2,
     zone: 0, pearls: 0, zoneEarned: 0, depthMarks: 0, tides: 0, zoneTides: 0, tideFills: 0,
     perks: { white: {}, jade: {}, shadow: {}, ember: {} },
@@ -120,7 +124,15 @@ function load() {
   try {
     const raw = localStorage.getItem(SAVE_KEY);
     if (raw) {
-      const s = Object.assign(freshState(), JSON.parse(raw));
+      const old = JSON.parse(raw);
+      if (old.epoch !== RESET_EPOCH) {
+        const fresh = freshState();
+        if (old.audio) fresh.audio = old.audio;
+        if (old.opts) fresh.opts = old.opts;
+        fresh.resetNote = true;
+        return fresh;
+      }
+      const s = Object.assign(freshState(), old);
       s.perks = Object.assign({ white: {}, jade: {}, shadow: {}, ember: {} }, s.perks);
       s.ember = Object.assign(freshState().ember, s.ember);
       s.gear.slotBonus = Object.assign({ crown: 1, shell: 1, charm: 1, lantern: 1 }, s.gear.slotBonus);
@@ -203,6 +215,7 @@ function tapValue() {
 // speeds you up without making the tide trivial.
 const fillNeed = (k) => BAL.pearlDiv * k * k * Math.pow(BAL.depthMult, S.depthMarks);
 function checkFills() {
+  if (isEmber()) return;
   while (S.tideFills < BAL.tideSteps && S.lumen >= fillNeed(S.tideFills + 1)) {
     const need = fillNeed(S.tideFills + 1);
     S.lumen -= need;
@@ -212,7 +225,8 @@ function checkFills() {
   }
 }
 const pearlSteps = () => S.tideFills;
-const tideFull = () => pearlSteps() >= BAL.tideSteps;
+// The Ember Wastes has no tide: Pearls come from cleared waves instead (pearlsPerWave).
+const tideFull = () => !isEmber() && pearlSteps() >= BAL.tideSteps;
 // Lumen held toward the current fill, and the Lumen that fill needs.
 function stepProgress() {
   const s = pearlSteps();
@@ -363,8 +377,13 @@ function resetRun() {
   S.ember.up = {};
   S.ember.wave = 1;
   S.ember.hp = emberMaxHp();
+  S.ember.path = null;
+  S.ember.pathAt = 0;
+  S.ember.shiftPending = false;
+  setPath(TD_START_PATH);
   if (isEmber()) S.lumen += (3000 + 3000 * rank('ember', 'cistern')) * Math.pow(BAL.depthMult, S.depthMarks);
   ui.td = null;
+  ui.arena = null;
   ui.builtKey = '';
   renderFish();
   growCoral();
@@ -565,7 +584,8 @@ function renderFish() {
       el.style.setProperty('--dur', dur + 's');
       el.style.setProperty('--delay', (-dur * (((i * 0.37) + (k * 0.5)) % 1)) + 's');
       el.style.setProperty('--w', sp.w + 'px');
-      el.innerHTML = '<span class="face">' + sp.svg(c.tint, sp.w) + '</span>';
+      el.innerHTML = '<span class="face">' + sp.svg(c.tint, sp.w) + '</span>'
+        + (k === 0 ? `<span class="flabel" data-c="${c.id}"><b>${c.sym}</b><span></span></span>` : '');
       layer.appendChild(el);
     }
   });
@@ -576,6 +596,44 @@ function renderFish() {
     `<i class="polyp-dot" style="left:${x}px;bottom:${y}px;animation-delay:${-i * 0.37}s"></i>`).join('');
   $('titan').hidden = lvl('titan') === 0;
   renderReefPets();
+  renderCollection();
+}
+// ---- Shallows collection -----------------------------------------------------
+// A periodic-table-style grid: one column per creature, one row per level milestone
+// (Lv 1, then each level where its output doubles). Cells light up as you reach them.
+const COL_LEVELS = [1].concat(MILESTONES);
+const creatureShare = (c) => creatureRate(c) * Math.pow(2, rank('white', 'polyps')) * petMult('creatures') * globalMult();
+$('collection').addEventListener('click', () => { Sound.click(); switchTab('creatures'); });
+function renderCollection() {
+  if (!$('colGrid')) return;
+  $('colGrid').innerHTML = COL_LEVELS.map((L) => CREATURES.map((c, i) => {
+    const l = lvl(c.id), seen = i < S.revealed;
+    const cls = l >= L ? 'on' : seen && (L === 1 || l >= COL_LEVELS[COL_LEVELS.indexOf(L) - 1]) ? 'next' : '';
+    return `<span class="ccell ${cls}" style="--tc:${c.tint}" title="${seen ? c.name : '???'} · Lv ${fmtInt(L)}"><b>${seen ? c.sym : ''}</b><i>${L >= 1000 ? '1K' : L}</i></span>`;
+  }).join('')).join('');
+  const got = COL_LEVELS.reduce((n, L) => n + CREATURES.filter((c) => lvl(c.id) >= L).length, 0);
+  $('colCount').textContent = got + ' / ' + COL_LEVELS.length * CREATURES.length;
+  updateCollection();
+}
+// The bar tracks whichever creature is closest to its next milestone.
+function updateCollection() {
+  if (!$('colNext')) return;
+  let best = null;
+  CREATURES.slice(0, S.revealed).forEach((c) => {
+    const l = lvl(c.id), next = l < 1 ? 1 : nextMilestone(l);
+    if (!next) return;
+    const prev = COL_LEVELS[COL_LEVELS.indexOf(next) - 1] || 0;
+    const frac = (l - prev) / (next - prev);
+    if (!best || frac > best.frac) best = { c, next, frac };
+  });
+  $('colNext').textContent = best ? `${best.c.name} → Lv ${fmtInt(best.next)}` : 'Every milestone reached';
+  $('colPct').textContent = best ? Math.floor(best.frac * 100) + '%' : '100%';
+  $('colBar').style.width = (best ? best.frac * 100 : 100) + '%';
+  $('colBar').style.background = best ? best.c.tint : '#5CF2D6';
+  document.querySelectorAll('.flabel').forEach((el) => {
+    const c = CREATURES.find((x) => x.id === el.dataset.c);
+    el.lastChild.textContent = '+' + fmt(creatureShare(c)) + '/s';
+  });
 }
 // Active pets sit on the sea floor of the reef.
 function renderReefPets() {
@@ -595,7 +653,7 @@ function switchTab(tab) {
   ui.tab = tab;
   const screen = tab === 'reef' ? homeScreen() : tab;
   document.querySelectorAll('.screen').forEach((s) => s.classList.toggle('active', s.id === 'screen-' + screen));
-  $('tidebox').hidden = tab !== 'reef';
+  $('tidebox').hidden = tab !== 'reef' || isEmber();
   ui.gardenDirty = true;
   ui.battleDirty = true;
   document.querySelectorAll('.tabs button').forEach((b) => {
@@ -699,7 +757,7 @@ $('oReset').addEventListener('click', () => {
     onOk: () => { localStorage.removeItem(SAVE_KEY); ui.erasing = true; location.reload(); },
   });
 });
-$('oVersion').textContent = 'Deep Bloom v0.4.1';
+$('oVersion').textContent = 'Deep Bloom Demo v1';
 $('musicStyle').addEventListener('change', () => { S.audio.musicStyle = $('musicStyle').value; syncSettings(); save(); });
 $('sfxStyle').addEventListener('change', () => { S.audio.sfxStyle = $('sfxStyle').value; syncSettings(); Sound.milestone(); save(); });
 VOL_INPUTS.forEach(([id, key]) => $(id).addEventListener('input', () => {
@@ -748,7 +806,7 @@ function buildCreatures() {
   $('creaturesTitle').textContent = isUnbloom() ? 'Unbloom upgrades' : isKelp() ? 'Garden upgrades' : isEmber() ? 'Towers' : 'Creatures';
   $('buySeg').hidden = isKelp() || isEmber();
   $('creaturesNote').textContent = isKelp() ? 'Garden upgrades are bought with Jade sap and reset with the tide, just like the garden.'
-    : isEmber() ? 'Pick 3 tower types to build on the Defense tab; tapping a new one swaps out your oldest pick (built towers of that type are refunded). More types unlock as your best wave grows. Upgrades and towers wash away with the tide.'
+    : isEmber() ? 'Pick 3 tower types to build on the Defense tab; tapping a new one swaps out your oldest pick (built towers of that type are refunded). More types unlock as your best wave grows. No tide here: towers and upgrades stay, and every cleared wave pays Ember Pearls. Magma blobs and Infernos grey out towers near them when they die, and every 15 waves the lava shifts and swallows towers in its new path.'
       : 'A creature doubles its output at Lv 5, 15, 100, 500 and 1,000. Upgrades reset with the tide; Pearl bonuses don\'t.';
   if (isKelp()) { buildGardenUps(list); return; }
   if (isEmber()) { buildTowerGuide(list); return; }
@@ -962,6 +1020,7 @@ function updateTide() {
 
 // ---- Reef HUD --------------------------------------------------------------
 function updateReef() {
+  updateCollection();
   $('lumen').textContent = fmt(S.lumen);
   $('rate').textContent = '+' + fmt(ratePerSec()) + ' per second';
   const pt = PEARLS[pearlType()];
@@ -1002,10 +1061,15 @@ function applyZone() {
   $('tabSecond').textContent = isKelp() ? 'Upgrades' : isEmber() ? 'Towers' : 'Creatures';
   // The Trench has no second screen of its own; gear already lives under Dive/Gear.
   $('tabSecond').closest('button').hidden = isTrench();
-  document.querySelector('.tabs').classList.toggle('four', isTrench());
+  // The Ember Wastes has no tide, so its Tide tab goes too.
+  document.querySelector('[data-tab="tide"]').hidden = isEmber();
+  document.querySelector('.tabs').classList.toggle('four', isTrench() || isEmber());
+  // Tide fills banked here before waves paid Pearls are paid out once.
+  if (isEmber() && S.tideFills > 0) { const g = pearlGain(); S.pearls += g; S.zoneEarned += g; S.tideFills = 0; }
   ui.emberDirty = true;
   ui.gardenDirty = true;
   ui.battleDirty = true;
+  setPath(savedPath());
 }
 
 // ---- Dungeons, eggs & pets ---------------------------------------------------
@@ -1347,6 +1411,40 @@ function openChest() {
   if (rarity >= 2) Sound.milestone(); else Sound.perk();
   save(); ui.builtKey = ''; updateUI();
 }
+// Opening in bulk: Open all, or Auto-open as chests arrive. Upgrades are equipped first
+// and never dissolved; other finds of a rarity set to Dissolve go straight into shards.
+const keepRarity = (i) => !(S.gear.keep && S.gear.keep[i] === false);
+function openChests(n) {
+  const got = { opened: 0, equipped: 0, kept: 0, dissolved: 0, shards: 0, best: null };
+  for (let i = 0; i < n && S.gear.chests > 0; i++) {
+    S.gear.chests -= 1;
+    got.opened++;
+    const g = rollGearItem(true);
+    if (!got.best || g.rarity > got.best.rarity) got.best = g;
+    if (S.gear.equipped[g.slot] === g.id) got.equipped++;
+    else if (keepRarity(g.rarity)) got.kept++;
+    else {
+      const sh = dissolveShards(g);
+      S.gear.items = S.gear.items.filter((x) => x !== g);
+      S.gear.shards += sh;
+      got.dissolved++;
+      got.shards += sh;
+    }
+  }
+  if (got.opened) {
+    const best = got.best && GEAR_RARITY[got.best.rarity].name;
+    ui.chestLog = `Opened ${got.opened}: ${got.equipped} equipped, ${got.kept} kept, ${got.dissolved} dissolved${got.shards ? ' (+' + fmtInt(got.shards) + ' shards)' : ''}. Best: ${best} ${got.best.name}.`;
+    if (got.best.rarity >= 2) Sound.milestone(); else Sound.perk();
+  }
+  return got;
+}
+function autoOpenChests() {
+  if (!S.gear.autoOpen || S.gear.chests < 1 || ui.washing) return;
+  openChests(S.gear.chests);
+  ui.chestLog = 'Auto-' + ui.chestLog.charAt(0).toLowerCase() + ui.chestLog.slice(1);
+  if (ui.tab === 'dive') ui.builtKey = '';
+  save();
+}
 function equipGear(id) {
   const g = gearItem(id);
   if (!g) return;
@@ -1389,30 +1487,65 @@ function wheelSlices(stake) {
   // ×1 widest … top value thinnest, with the chest and Pearl slices mixed in.
   const list = Array.from({ length: n }, (_, i) => ({ kind: 'bonus', value: 1 + (top - 1) * i / (n - 1), weight: (n - i) * (1 + 0.2 * wUp('tilt') * i / (n - 1)), color: WHEEL_COLORS[i] }));
   const prize = WHEEL.prizeWeight + wUp('prize');
-  list.splice(2, 0, { kind: 'chest', weight: prize, color: '#E8A15C' });
-  list.splice(6, 0, { kind: 'pearls', weight: prize, color: '#F2F7FF' });
+  list.splice(2, 0, { kind: 'chest', weight: prize, color: '#A0643A' });
+  list.splice(6, 0, { kind: 'pearls', weight: prize, color: '#FF6B6B' });
   const total = list.reduce((a, s) => a + s.weight, 0);
   let a = 0;
+  // Rarer slices pay more: a bonus slice's gain is boosted by its chance of missing,
+  // so a 2% slice adds 98% more on top (×2 → ×2.98).
   return list.map((s) => {
     const span = (s.weight / total) * 360;
     const out = { ...s, start: a, span };
+    if (s.kind === 'bonus') out.value = 1 + (s.value - 1) * (2 - span / 360);
     a += span;
     return out;
+  });
+}
+const wheelBest = (stake) => Math.max(...wheelSlices(stake).filter((s) => s.kind === 'bonus').map((s) => s.value));
+// Spins a wheel SVG from one angle to another: eases out over ms, wobbles a little as it
+// settles, and ticks the pointer each time a slice edge (edges: slice start angles) passes.
+function spinWheel(svg, from, to, ms, edges) {
+  const pointer = svg.parentElement.querySelector('.wheel-pointer');
+  const sliceAt = (a) => {
+    const w = ((360 - (a % 360)) % 360 + 360) % 360;
+    let i = 0;
+    edges.forEach((e, k) => { if (w >= e) i = k; });
+    return i;
+  };
+  return new Promise((done) => {
+    const t0 = performance.now();
+    let last = sliceAt(from), lastTick = 0;
+    const step = (now) => {
+      const t = Math.min(1, (now - t0) / ms);
+      const ease = 1 - Math.pow(1 - t, 4);
+      const settle = t > 0.85 ? Math.sin(((t - 0.85) / 0.15) * Math.PI * 2) * 3 * ((1 - t) / 0.15) : 0;
+      const a = from + (to - from) * ease + settle;
+      svg.style.transform = `rotate(${a}deg)`;
+      const here = sliceAt(a);
+      if (here !== last) {
+        last = here;
+        if (now - lastTick > 45) { lastTick = now; Sound.click(); restartClass(pointer, 'tick', 300); }
+      }
+      if (t < 1) requestAnimationFrame(step);
+      else { svg.style.transform = `rotate(${to}deg)`; done(); }
+    };
+    requestAnimationFrame(step);
   });
 }
 const WHEEL_COLORS = ['#B5C2DA', '#9DB8FF', '#6FB8FF', '#6FE3A5', '#C79BFF', '#FF8FD0', '#FFC46B', '#FFF3B0'];
 const sliceLabel = (s) => (s.kind === 'chest' ? 'Chest' : s.kind === 'pearls' ? 'Pearls' : fmtX(s.value));
 function drawWheel(stake) {
   const pt = (deg, r) => { const t = (deg - 90) * Math.PI / 180; return [Math.cos(t) * r, Math.sin(t) * r]; };
-  $('wheelSvg').innerHTML = wheelSlices(stake).map((s) => {
+  const slices = wheelSlices(stake);
+  $('wheelSvg').innerHTML = slices.map((s) => {
     const [x1, y1] = pt(s.start, 96);
     const [x2, y2] = pt(s.start + s.span, 96);
     const large = s.span > 180 ? 1 : 0;
-    const mid = s.start + s.span / 2;
-    const [tx, ty] = pt(mid, 66);
-    return `<path d="M0 0 L${x1} ${y1} A96 96 0 ${large} 1 ${x2} ${y2} Z" fill="${s.color}" stroke="#0B1026" stroke-width="1.5"/>
-      <text x="${tx}" y="${ty}" text-anchor="middle" dominant-baseline="middle" transform="rotate(${mid} ${tx} ${ty})">${sliceLabel(s)}</text>`;
+    return `<path d="M0 0 L${x1} ${y1} A96 96 0 ${large} 1 ${x2} ${y2} Z" fill="${s.color}" stroke="#0B1026" stroke-width="1.5"/>`;
   }).join('') + '<circle r="14" fill="#0B1026" stroke="#FFC46B" stroke-width="3"/>';
+  // Colour key instead of text on the slices: bonuses from small to big, then the prizes.
+  const order = slices.filter((s) => s.kind === 'bonus').concat(slices.filter((s) => s.kind !== 'bonus'));
+  $('wLegend').innerHTML = order.map((s) => `<span class="wkey"><i style="background:${s.color}"></i><b>${sliceLabel(s)}</b><span>${Math.round(s.span / 3.6)}%</span></span>`).join('');
 }
 function openWheel(slot) {
   ui.wheelSlot = slot;
@@ -1434,7 +1567,7 @@ function syncWheel(resetStake) {
   $('wShards').textContent = fmtInt(S.gear.shards) + ' shards';
   const st = Number(stake.value);
   $('wNow').textContent = `Slot bonus now ${fmtAdd(slotAdd(slot))} (${fmtX(slotBonus(slot))}), added to any gear in the ${GEAR_SLOTS[slot].name} slot. Prize slices: ${wheelChests(st)} ${wheelChests(st) === 1 ? 'chest' : 'chests'} or ${fmtInt(wheelPearls(st))} ${PEARLS[pearlType()].name} Pearls.`;
-  $('wStakeVal').textContent = most < 1 ? 'No shards: dissolve spare gear' : `${stake.value} → up to ${fmtX(wheelTop(st))}`;
+  $('wStakeVal').textContent = most < 1 ? 'No shards: dissolve spare gear' : `${stake.value} → up to ${fmtX(wheelBest(st))}`;
   $('wSpin').disabled = most < 1 || ui.spinning;
   if (!ui.spinning) drawWheel(Number(stake.value));
   $('wUps').innerHTML = WHEEL_UPS.map((u) => {
@@ -1469,11 +1602,10 @@ $('wSpin').addEventListener('click', () => {
   $('wResult').className = 'center strong';
   // Turn the wheel so the chosen slice stops under the pointer at the top.
   const land = hit.start + hit.span * (0.2 + Math.random() * 0.6);
-  const base = Math.ceil((ui.wheelAngle || 0) / 360) * 360;
-  ui.wheelAngle = base + 5 * 360 + (360 - land);
-  $('wheelSvg').style.transform = `rotate(${ui.wheelAngle}deg)`;
+  const from = ui.wheelAngle || 0;
+  ui.wheelAngle = Math.ceil(from / 360) * 360 + 5 * 360 + (360 - land);
   Sound.seed();
-  setTimeout(() => {
+  spinWheel($('wheelSvg'), from, ui.wheelAngle, 3600, slices.map((x) => x.start)).then(() => {
     const slot = ui.wheelSlot;
     const old = slotBonus(slot);
     if (hit.kind === 'chest') {
@@ -1507,7 +1639,7 @@ $('wSpin').addEventListener('click', () => {
     save();
     syncWheel(false);
     updateUI();
-  }, 3700);
+  });
 });
 
 function gearIcon(slot, color, size) {
@@ -1546,14 +1678,29 @@ function buildGear(root) {
   }
   root.innerHTML = `
     <div class="panel"><div class="row"><b>Sunken chests</b><span class="small strong"><span id="chestCount"></span> · Shards ${fmtInt(G.shards)}</span></div>
-      <button type="button" id="chestBtn" class="btn primary gear-btn">Open a chest</button>
-      <span class="sub small">One chest with every tide in the Twilight Trench and deeper.</span></div>
+      <div class="two"><button type="button" id="chestBtn" class="btn primary gear-btn">Open one</button><button type="button" id="chestAll" class="btn gear-btn">Open all</button></div>
+      <button type="button" id="chestAuto" class="btn small-btn" aria-pressed="${!!G.autoOpen}">Auto-open new chests: ${G.autoOpen ? 'on' : 'off'}</button>
+      <span class="small muted">When opening in bulk, spare finds of each rarity are:</span>
+      <div class="keep-row">${GEAR_RARITY.map((r, i) => `<button type="button" class="keep-chip" data-keep="${i}" aria-pressed="${keepRarity(i)}" style="--rc:${r.color}"><b>${r.name}</b><span>${keepRarity(i) ? 'Keep' : 'Dissolve'}</span></button>`).join('')}</div>
+      <span class="sub small">${ui.chestLog || 'One chest with every tide in the Twilight Trench and deeper. Upgrades are always equipped, never dissolved.'}</span></div>
     <div class="label pad">Equipped · tap a slot to spin its wheel</div>
     <div class="gslots">${slotTiles}</div>
     <div class="label pad">Found · ${inv.length}</div>
     <div class="ggrid">${invTiles}</div>
     ${detail}`;
   $('chestBtn').addEventListener('click', openChest);
+  $('chestAll').addEventListener('click', () => { openChests(S.gear.chests); save(); ui.builtKey = ''; updateUI(); });
+  $('chestAuto').addEventListener('click', () => {
+    G.autoOpen = !G.autoOpen;
+    Sound.click();
+    autoOpenChests();
+    save(); ui.builtKey = ''; updateUI();
+  });
+  root.querySelectorAll('[data-keep]').forEach((b) => b.addEventListener('click', () => {
+    const i = Number(b.dataset.keep);
+    G.keep = GEAR_RARITY.map((_, k) => (k === i ? !keepRarity(k) : keepRarity(k)));
+    Sound.click(); save(); ui.builtKey = ''; updateUI();
+  }));
   root.querySelectorAll('[data-wheel]').forEach((b) => b.addEventListener('click', () => { Sound.click(); openWheel(b.dataset.wheel); }));
   root.querySelectorAll('.gitem').forEach((b) => b.addEventListener('click', () => {
     if (!b.dataset.id) return;
@@ -1568,6 +1715,7 @@ function updateGear() {
   if (!$('chestCount')) return;
   $('chestCount').textContent = S.gear.chests + (S.gear.chests === 1 ? ' chest' : ' chests');
   $('chestBtn').disabled = S.gear.chests < 1;
+  $('chestAll').disabled = S.gear.chests < 1;
 }
 
 document.querySelectorAll('#diveSeg button').forEach((b) => b.addEventListener('click', () => {
@@ -1852,24 +2000,30 @@ const TIERS = [
   { name: 'Godlike', color: '#FFF3B0' }, { name: 'Demonic', color: '#FF6B6B' }, { name: 'Abyssal', color: '#9DB8FF' },
   { name: 'Eternal', color: '#5CF2D6' }, { name: 'Ultra', color: '#FFFFFF' },
 ];
+// shape picks how a foe is drawn in the arena; speed is in arena units per second; from is
+// the first wave the species shows up in (every species is in from Hard onward).
 const FOES = [
-  { name: 'Lanternfish swarm', color: '#FFC46B' }, { name: 'Gulper eel', color: '#9DB8FF' },
-  { name: 'Vampire squid', color: '#FF6B6B' }, { name: 'Giant isopod', color: '#B5C2DA' },
-  { name: 'Frilled shark', color: '#6FB8FF' },
+  { name: 'Lanternfish swarm', color: '#FFC46B', shape: 'lantern', speed: 1.5, from: 1 }, { name: 'Gulper eel', color: '#9DB8FF', shape: 'eel', speed: 1.1, from: 1 },
+  { name: 'Vampire squid', color: '#FF6B6B', shape: 'squid', speed: 1.0, from: 3 }, { name: 'Giant isopod', color: '#B5C2DA', shape: 'isopod', speed: 0.7, from: 5 },
+  { name: 'Frilled shark', color: '#6FB8FF', shape: 'shark', speed: 1.3, from: 7 },
 ];
-const BOSS = { name: 'Abyss kraken', color: '#E58BFF' };
+const BOSS = { name: 'Abyss kraken', color: '#E58BFF', shape: 'kraken', speed: 0.5 };
 // On the way back up the roles flip: your shoal drives the divers out.
 const HUMANS = [
-  { name: 'Scuba diver', color: '#FFC46B' }, { name: 'Harpoon hunter', color: '#FF6B6B' },
-  { name: 'Net trawler', color: '#B5C2DA' }, { name: 'Salvage drone', color: '#9DB8FF' },
-  { name: 'Drill sub', color: '#FF8A5C' },
+  { name: 'Scuba diver', color: '#FFC46B', shape: 'diver', speed: 1.1, from: 1 }, { name: 'Harpoon hunter', color: '#FF6B6B', shape: 'diver', speed: 1.2, from: 1 },
+  { name: 'Net trawler', color: '#B5C2DA', shape: 'sub', speed: 0.7, from: 3 }, { name: 'Salvage drone', color: '#9DB8FF', shape: 'drone', speed: 1.4, from: 5 },
+  { name: 'Drill sub', color: '#FF8A5C', shape: 'sub', speed: 0.9, from: 7 },
 ];
-const HUMAN_BOSS = { name: 'Factory ship', color: '#E58BFF' };
-const GUARDIAN_SVG = { diver: '', fish: '<path d="M10 52 C 22 22, 62 20, 74 50 C 62 78, 22 80, 10 52 Z" fill="#6FE3A5"/><path d="M74 50 L 88 36 L 86 52 L 88 66 Z" fill="#5CF2D6"/><circle cx="28" cy="46" r="5" fill="#04211C"/><path d="M40 58 C 46 54, 52 54, 58 58" fill="none" stroke="#04211C" stroke-width="2.5" stroke-linecap="round"/><path id="gCrown" d="M28 30 L 34 16 L 43 26 L 52 16 L 58 30" fill="none" stroke="#4C6E78" stroke-width="3" stroke-linejoin="round"/>' };
-const FOE_SVG = { fish: '', diver: '<path id="foeBody" d="M10 16 C 10 10, 50 8, 66 14 C 70 20, 66 26, 50 26 C 30 28, 12 24, 10 16 Z"/><path id="foeTail" d="M66 14 L 88 6 L 84 20 L 88 30 L 66 24 Z" opacity=".8"/><rect x="24" y="4" width="26" height="7" rx="3" fill="#4C6E78"/><circle cx="14" cy="15" r="6" fill="#9BF0E0" stroke="#050C1C" stroke-width="2"/><path d="M30 26 L 26 36 M44 26 L 46 36" stroke="#050C1C" stroke-width="3" stroke-linecap="round"/>' };
+const HUMAN_BOSS = { name: 'Factory ship', color: '#E58BFF', shape: 'ship', speed: 0.45 };
+// A hermit crab wearing a sunken chest. It never fights back and scuttles across the
+// seabed trying to get away; kill it before it does and it drops gear and Lumen.
+const TREASURE_CRAB = { name: 'Treasure crab', color: '#E0A040', shape: 'chest', speed: 1.1 };
 // Rewards grow at the same pace as enemies (and only ×4 per tier vs ×8 for enemies), so
 // pushing further gets harder, not easier. Chests are rare; bosses always drop one.
-const BAT = { tierMult: 8, levelGrowth: 1.035, chestChance: 0.08, autoSecs: 2.5, winBase: 5000, winGrowth: 1.035, tierReward: 4 };
+// A live fight lasts several seconds, so wins pay more than the old instant fights did.
+const BAT = { tierMult: 8, levelGrowth: 1.035, autoSecs: 0.8, winBase: 15000, winGrowth: 1.035, tierReward: 4 };
+// The arena is ARENA.w × ARENA.h units; the Guardian holds the glowing floor in the middle.
+const ARENA = { w: 10, h: 7, bannerSecs: 1.5, spawnGap: 0.45, foeHp: 16, foeAtk: 17, foeRate: 1.1, reach: 0.75, swim: 1.8, eliteHp: 1.8, eliteAtk: 1.4, crabChance: 0.2, crabHp: 3, crabLumen: 0.5 };
 function tierOf(d) {
   const t = TIERS[Math.min(d, TIERS.length - 1)];
   return { name: t.name + (d >= TIERS.length ? ' ' + (d - TIERS.length + 2) : ''), color: t.color };
@@ -1878,25 +2032,54 @@ function stageLabel(b = S.battle) {
   return (b.diff ? tierOf(b.diff).name + ' ' : '') + b.wave + '-' + b.level;
 }
 const isBossStage = () => S.battle.level === 10;
-const foeOf = () => (isUprising() ? (isBossStage() ? HUMAN_BOSS : HUMANS[(S.battle.wave + S.battle.level) % HUMANS.length])
-  : isBossStage() ? BOSS : FOES[(S.battle.wave + S.battle.level) % FOES.length]);
-// Swap the arena art between the diver Guardian and the fish shoal.
-function syncArenaArt() {
-  const mode = isUprising() ? 'fish' : 'diver';
-  const g = $('guardian'), f = $('foe');
-  if (!GUARDIAN_SVG.diver) { GUARDIAN_SVG.diver = g.innerHTML; FOE_SVG.fish = f.innerHTML; }
-  if (g.dataset.mode === mode) return;
-  g.dataset.mode = mode;
-  g.innerHTML = GUARDIAN_SVG[mode];
-  f.innerHTML = FOE_SVG[mode === 'fish' ? 'diver' : 'fish'];
-  $('myName').textContent = mode === 'fish' ? 'Your shoal' : 'Your Guardian';
-  $('bZoneLabel').textContent = mode === 'fish' ? 'Trench uprising · ' : 'Twilight Trench · ';
+const foeKinds = () => (isUprising() ? HUMANS : FOES).filter((k) => S.battle.diff > 0 || k.from <= S.battle.wave);
+const foeOf = () => {
+  if (isBossStage()) return isUprising() ? HUMAN_BOSS : BOSS;
+  const kinds = foeKinds();
+  return kinds[(S.battle.wave + S.battle.level) % kinds.length];
+};
+// What the current stage sends. Foe health and bite follow foePower(); on top of that,
+// deeper waves bring bigger packs, and from wave 3 some of the pack are glowing elites.
+// Foe health tracks your damage and their bite tracks your toughness, so whether you
+// built for damage or for armour, only total Power vs foe power decides the fight.
+function stagePack() {
+  const b = S.battle, p = foePower() / 40, boss = isBossStage();
+  const g = guardianShape();
+  const n = boss ? 2 + Math.floor(b.wave / 3) : 4 + Math.floor(b.wave / 3) + Math.floor(b.level / 4);
+  const elites = boss ? 0 : Math.min(n - 1, Math.floor((b.wave - 1) / 3) + b.diff);
+  return { n, elites, boss, hp: ARENA.foeHp * p * g.dpsN / g.k, atk: ARENA.foeAtk * p * g.toughN / g.k };
 }
-// Gear has diminishing returns (powers below 1), so even Mythic gear with big slot
-// bonuses lifts you a few tiers, not straight to the end.
+// The Guardian's fighting stats, one per gear slot: Crown → Attack, Shell → Health and
+// Armour, Charm → Crit chance, Lantern → reach and attack speed (the light it sees by).
+// Gear has diminishing returns, so even Mythic gear with big slot bonuses lifts you a
+// few tiers, not straight to the end.
+function guardianStats() {
+  const L = Math.pow(1.25, rank('shadow', 'lasting'));
+  const c = gearPower('crown'), s = gearPower('shell'), ch = gearPower('charm'), l = gearPower('lantern');
+  return {
+    atk: 10 * Math.pow(c, 1.2) * L,
+    hp: 100 * Math.pow(s, 0.35) * L,
+    armour: 100 * (Math.pow(s, 0.25) - 1), // damage taken × 100 / (100 + armour)
+    crit: Math.min(0.6, 0.05 + 0.08 * (ch - 1)),
+    rate: 0.6 / Math.pow(l, 0.4),
+    range: Math.min(2.6, 2 + 0.6 * Math.log10(l)),
+  };
+}
+// Power sums the stats up as √(damage per second × effective health), scaled so a
+// Guardian with no gear has 40, the same as a level 1-1 foe.
+// dpsN and toughN are damage per second and effective health relative to a gearless Guardian.
+function guardianShape(st = guardianStats()) {
+  const dpsN = (st.atk * (1 + st.crit) / st.rate) / (10 * 1.05 / 0.6), toughN = (st.hp * (100 + st.armour) / 100) / 100;
+  return { dpsN, toughN, k: Math.sqrt(dpsN * toughN) };
+}
 function guardianPower() {
-  return Math.round(40 * Math.pow(gearPower('crown'), 0.6) * Math.pow(gearPower('shell'), 0.3)
-    * Math.pow(gearPower('charm'), 0.3) * Math.pow(gearPower('lantern'), 0.2) * Math.pow(1.25, rank('shadow', 'lasting')));
+  return Math.round(40 * guardianShape().k);
+}
+// How hard the whole stage is, for the HUD: foePower() adjusted for pack size, elites and
+// the boss (fit from simulated fights), so "Power X vs Y" is about even odds when X ≈ Y.
+function stagePower() {
+  const pk = stagePack();
+  return Math.round(foePower() * (0.38 + 0.07 * (pk.n + 1.5 * pk.elites + (pk.boss ? 8 : 0))));
 }
 function foePower() {
   const b = S.battle;
@@ -1909,51 +2092,436 @@ function winReward() {
 }
 const bubbleCount = () => (S.battle.level >= 4 ? 2 : 1);
 const bubbleCost = () => winReward() * 6;
-function fight() {
-  const now = Date.now();
-  if (now < (ui.fightReadyAt || 0) || ui.washing) return;
-  ui.fightReadyAt = now + 900;
-  const b = S.battle;
-  const foe = foeOf();
-  const won = Math.random() < guardianPower() / (guardianPower() + foePower());
-  const before = stageLabel();
-  restartClass($('guardian'), 'lunge', 700);
-  restartClass($('foe'), 'lunge-l', 700);
+// ---- The live fight -----------------------------------------------------------
+// Each stage is a short fight: foes swim in out of the dark from both sides and above,
+// and the Guardian holds the glowing patch of floor in the middle until they're all
+// gone (win) or its health runs out (lose). Foe health and bite grow with foePower(),
+// so "Power X vs Y" in the HUD still reads as who's favoured.
+function arenaState() {
+  if (!ui.arena) ui.arena = { phase: 'idle', wait: 0.6, me: null, foes: [], queue: [], shots: [], pops: [], banner: null, t: 0 };
+  return ui.arena;
+}
+function startFight() {
+  const a = arenaState();
+  if (a.phase !== 'idle' || ui.washing || tideFull()) return;
+  const st = guardianStats();
+  const pk = stagePack();
+  const kinds = foeKinds();
+  const pick = () => kinds[Math.floor(Math.random() * kinds.length)];
+  // A mixed pack led by the stage's own foe (elites swim in last); boss stages bring the
+  // boss behind a few minions.
+  a.queue = Array.from({ length: pk.n }, (_, i) => {
+    const elite = i >= pk.n - pk.elites;
+    return { kind: pk.boss || i % 2 ? pick() : foeOf(), hp: pk.hp * (elite ? ARENA.eliteHp : 1), atk: pk.atk * (elite ? ARENA.eliteAtk : 1), size: elite ? 0.58 : 0.46, elite };
+  });
+  if (pk.boss) a.queue.push({ kind: foeOf(), hp: pk.hp * 6, atk: pk.atk * 2.5, size: 1.05, boss: true });
+  a.st = st;
+  a.me = { x: ARENA.w / 2, y: ARENA.h * 0.62, hp: st.hp, max: st.hp, cd: 0.4, face: 1, hurt: 0 };
+  a.foes = []; a.shots = []; a.pops = []; a.banner = null;
+  a.total = a.queue.length;
+  a.crabHp = pk.hp * ARENA.crabHp;
+  a.crabIn = !pk.boss && Math.random() < ARENA.crabChance + 0.05 * rank('shadow', 'armory') ? 1 + Math.random() * 2 : 0;
+  a.loot = null;
+  a.spawnIn = 0.2;
+  a.phase = 'fight';
   ui.battleDrops = [];
+  ui.battleDirty = true;
+  Sound.click();
+}
+function spawnFoe(a) {
+  const f = a.queue.shift();
+  const side = f.boss ? 2 : Math.floor(Math.random() * 3);
+  if (side === 0) { f.x = -0.6; f.y = 1 + Math.random() * (ARENA.h - 2.2); }
+  else if (side === 1) { f.x = ARENA.w + 0.6; f.y = 1 + Math.random() * (ARENA.h - 2.2); }
+  else { f.x = 1 + Math.random() * (ARENA.w - 2); f.y = -0.8; }
+  f.max = f.hp; f.cd = 0.6; f.t = Math.random() * 6; f.hurt = 0;
+  a.foes.push(f);
+}
+function arenaTick(dt) {
+  const a = arenaState();
+  a.t += dt;
+  a.shots = a.shots.filter((s) => (s.t -= dt) > 0);
+  a.pops = a.pops.filter((p) => (p.t -= dt) > 0);
+  if (a.phase === 'banner') {
+    if ((a.banner.t -= dt) <= 0) { a.phase = 'idle'; a.wait = BAT.autoSecs; a.banner = null; }
+    return;
+  }
+  if (a.phase === 'idle') {
+    if (S.battle.auto && !tideFull() && !ui.washing && (a.wait -= dt) <= 0) startFight();
+    return;
+  }
+  const me = a.me, st = a.st;
+  if ((a.spawnIn -= dt) <= 0 && a.queue.length) { spawnFoe(a); a.spawnIn = ARENA.spawnGap; }
+  if (a.crabIn > 0 && (a.crabIn -= dt) <= 0) {
+    const left = Math.random() < 0.5;
+    a.foes.push({ kind: TREASURE_CRAB, crab: true, dir: left ? 1 : -1, x: left ? -0.6 : ARENA.w + 0.6, y: ARENA.h - 0.85, hp: a.crabHp, max: a.crabHp, size: 0.5, t: 0, hurt: 0 });
+    a.pops.push({ x: ARENA.w / 2, y: ARENA.h * 0.25, t: 1.2, text: 'Treasure crab!', crit: true });
+  }
+  me.hurt = Math.max(0, me.hurt - dt);
+  // The Guardian drifts toward the nearest foe it can't reach, else back to its post.
+  let target = null, best = Infinity;
+  a.foes.forEach((f) => { const d = Math.hypot(f.x - me.x, f.y - me.y) - f.size; if (d < best) { best = d; target = f; } });
+  const post = { x: ARENA.w / 2, y: ARENA.h * 0.62 };
+  const goal = target && best > st.range ? target : post;
+  const gd = Math.hypot(goal.x - me.x, goal.y - me.y);
+  if (gd > 0.05) { const step = Math.min(gd, 1.3 * dt); me.x += (goal.x - me.x) / gd * step; me.y += (goal.y - me.y) / gd * step; }
+  if (target) me.face = target.x < me.x ? -1 : 1;
+  if ((me.cd -= dt) <= 0 && target && best <= st.range) {
+    const crit = Math.random() < st.crit;
+    const dmg = st.atk * (crit ? 2 : 1);
+    target.hp -= dmg;
+    target.hurt = 0.15;
+    me.cd = st.rate;
+    a.shots.push({ x1: me.x + me.face * 0.35, y1: me.y - 0.05, x2: target.x, y2: target.y, t: 0.14, crit });
+    a.pops.push({ x: target.x, y: target.y - target.size - 0.2, t: 0.7, text: (crit ? 'Crit ' : '') + fmt(dmg), crit });
+    if (target.hp <= 0) {
+      a.foes = a.foes.filter((f) => f !== target);
+      a.shots.push({ kind: 'burst', x: target.x, y: target.y, r: target.size * 2, t: 0.45, color: target.kind.color });
+      if (target.boss) Sound.perk();
+      if (target.crab) lootCrab(a, target);
+    }
+  }
+  // Foes swim in and bite once they're close.
+  a.foes.forEach((f) => {
+    f.t += dt; f.hurt = Math.max(0, f.hurt - dt);
+    if (f.crab) {
+      f.x += f.dir * f.kind.speed * dt;
+      if (f.x < -1 || f.x > ARENA.w + 1) { f.gone = true; a.pops.push({ x: Math.min(Math.max(f.x, 1), ARENA.w - 1), y: f.y - 0.6, t: 1, text: 'Escaped' }); }
+      return;
+    }
+    const dx = me.x - f.x, dy = me.y - f.y, d = Math.hypot(dx, dy);
+    const reach = ARENA.reach + f.size;
+    if (d > reach) { const step = Math.min(d - reach, f.kind.speed * ARENA.swim * dt); f.x += dx / d * step; f.y += dy / d * step; }
+    else if ((f.cd -= dt) <= 0) {
+      f.cd = ARENA.foeRate;
+      me.hp -= f.atk * 100 / (100 + st.armour);
+      me.hurt = 0.18;
+      f.lunge = 0.2;
+    }
+    f.lunge = Math.max(0, (f.lunge || 0) - dt);
+  });
+  a.foes = a.foes.filter((f) => !f.gone);
+  // Foes nudge each other apart so a pack surrounds the Guardian instead of stacking up.
+  a.foes.forEach((f, i) => a.foes.slice(i + 1).forEach((g) => {
+    if (f.crab || g.crab) return;
+    const dx = g.x - f.x, dy = g.y - f.y, d = Math.hypot(dx, dy) || 0.01, min = (f.size + g.size) * 0.9;
+    if (d < min) { const push = (min - d) / 2; f.x -= dx / d * push; f.y -= dy / d * push; g.x += dx / d * push; g.y += dy / d * push; }
+  }));
+  if (me.hp <= 0) { me.hp = 0; endFight(false); }
+  else if (!a.queue.length && !a.foes.length && !(a.crabIn > 0)) endFight(true);
+}
+function lootCrab(a, crab) {
+  const g = rollGearItem(false);
+  const lumen = winReward() * ARENA.crabLumen;
+  if (!tideFull()) earn(lumen);
+  a.loot = g;
+  ui.battleDrops = (ui.battleDrops || []).concat([g]);
+  ui.battleDirty = true;
+  a.pops.push({ x: crab.x, y: crab.y - 0.9, t: 1.4, text: g.name, color: GEAR_RARITY[g.rarity].color });
+  a.pops.push({ x: crab.x, y: crab.y - 0.4, t: 1.2, text: '+' + fmt(lumen) });
+  a.shots.push({ kind: 'burst', x: crab.x, y: crab.y, r: 1.4, t: 0.45, color: GEAR_RARITY[g.rarity].color });
+  Sound.milestone();
+}
+function endFight(won) {
+  const a = arenaState();
+  const b = S.battle;
+  const before = stageLabel();
+  const boss = isBossStage();
+  const foe = foeOf();
+  a.phase = 'banner';
   if (won) {
     const reward = winReward();
     if (!tideFull()) earn(reward);
-    const boss = isBossStage();
     if (b.level < 10) b.level += 1;
     else if (b.wave < 9) { b.wave += 1; b.level = 1; }
     else { b.diff += 1; b.wave = 1; b.level = 1; }
     let msg = (boss ? 'Boss down! ' : 'Won ' + before + '! ') + '+' + fmt(reward) + ' Lumen.';
     if (b.diff && b.wave === 1 && b.level === 1 && boss) msg = tierOf(b.diff).name + ' unlocked! ' + msg;
-    if (boss || Math.random() < BAT.chestChance + 0.04 * rank('shadow', 'armory')) {
-      ui.battleDrops = [rollGearItem(false)];
+    if (boss) {
+      ui.battleDrops = (ui.battleDrops || []).concat([rollGearItem(false)]);
       msg += ' A sunken chest dropped!';
     }
+    if (a.loot) msg += ' The treasure crab dropped ' + a.loot.name + '!';
     b.log = msg;
-    ui.hpAnim = 'foe';
-    floatTextAt($('arenaPops'), '+' + fmt(reward), 'right');
+    a.banner = { won: true, text: boss ? 'Boss down' : 'Victory', sub: '+' + fmt(reward) + ' Lumen', t: ARENA.bannerSecs };
     if (boss) Sound.milestone(); else Sound.buy();
   } else {
     if (b.level > 1) b.level -= 1;
     else if (b.wave > 1) { b.wave -= 1; b.level = 10; }
-    b.log = 'Defeated by the ' + foe.name + '. Back to ' + stageLabel() + '. Better gear helps.';
-    ui.hpAnim = 'me';
+    b.log = 'Overwhelmed by the ' + foe.name + (boss ? '' : ' pack') + '. Back to ' + stageLabel() + '. Better gear helps.';
+    a.banner = { won: false, text: 'Defeated', sub: 'Back to ' + stageLabel(), t: ARENA.bannerSecs };
     Sound.click();
   }
   ui.battleDirty = true;
   save();
   updateUI();
 }
-function floatTextAt(parent, text, side) {
-  const f = document.createElement('span');
-  f.className = 'float gold arena-float ' + side;
-  f.textContent = text;
-  parent.appendChild(f);
-  setTimeout(() => f.remove(), 950);
+// ---- Drawing the trench arena ------------------------------------------------
+// The trench floor glows where the Guardian's lantern reaches (its range); beyond that
+// it's dark water, rock walls and drifting marine snow, and the foes swim in from there.
+const ARENA_SNOW = Array.from({ length: 36 }, () => ({ x: Math.random() * ARENA.w, y: Math.random() * ARENA.h, s: 0.02 + Math.random() * 0.04, v: 0.08 + Math.random() * 0.15 }));
+const ARENA_ROCKS = [0, 1].map((side) => Array.from({ length: 8 }, (_, i) => ({ y: i * ARENA.h / 7, w: 0.35 + ((i * 7 + side * 3) % 5) * 0.12 })));
+function arenaCanvas() {
+  const cv = $('arenaCv');
+  const w = Math.floor(cv.parentElement.getBoundingClientRect().width);
+  const h = Math.round(w * ARENA.h / ARENA.w);
+  const dpr = window.devicePixelRatio || 1;
+  if (cv.width !== w * dpr) { cv.width = w * dpr; cv.height = h * dpr; cv.style.height = h + 'px'; }
+  return { ctx: cv.getContext('2d'), u: w / ARENA.w, w, h, dpr };
+}
+function drawArena() {
+  const { ctx, u, w, h, dpr } = arenaCanvas();
+  if (!w) return;
+  const a = arenaState();
+  const t = a.t;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  // Water: lighter toward the top, nearly black at the trench floor.
+  const water = ctx.createLinearGradient(0, 0, 0, h);
+  water.addColorStop(0, '#0B1A36'); water.addColorStop(1, '#030816');
+  ctx.fillStyle = water; ctx.fillRect(0, 0, w, h);
+  // Faint light shafts from far above.
+  ctx.fillStyle = 'rgba(157,184,255,.04)';
+  [[2.2, 0.8], [5.6, 1.1], [8.1, 0.6]].forEach(([x, sw]) => {
+    const sway = Math.sin(t * 0.3 + x) * 0.3;
+    ctx.beginPath(); ctx.moveTo((x - sw / 2 + sway) * u, 0); ctx.lineTo((x + sw / 2 + sway) * u, 0);
+    ctx.lineTo((x + sw * 1.4) * u, h); ctx.lineTo((x - sw * 1.4) * u, h); ctx.fill();
+  });
+  const me = a.me || { x: ARENA.w / 2, y: ARENA.h * 0.62, hp: 1, max: 1, face: 1, hurt: 0 };
+  const lant = gearItem(S.gear.equipped.lantern);
+  const lampColor = lant ? GEAR_RARITY[lant.rarity].color : '#5CF2D6';
+  const range = guardianStats().range;
+  // The lantern's pool of light on the floor marks how far the Guardian can strike.
+  const pool = ctx.createRadialGradient(me.x * u, me.y * u, 0, me.x * u, me.y * u, range * u);
+  pool.addColorStop(0, hexA(lampColor, 0.2)); pool.addColorStop(0.7, hexA(lampColor, 0.07)); pool.addColorStop(1, hexA(lampColor, 0));
+  ctx.fillStyle = pool; ctx.beginPath(); ctx.arc(me.x * u, me.y * u, range * u, 0, Math.PI * 2); ctx.fill();
+  // Seabed with glowing coral along the bottom.
+  ctx.fillStyle = '#071226';
+  ctx.beginPath(); ctx.moveTo(0, h);
+  for (let x = 0; x <= ARENA.w; x += 0.5) ctx.lineTo(x * u, h - (0.35 + 0.12 * Math.sin(x * 1.7)) * u);
+  ctx.lineTo(w, h); ctx.fill();
+  [[0.9, '#2ED3B7'], [2.4, '#FF8FD0'], [7.3, '#8F7BFF'], [9.1, '#2ED3B7']].forEach(([x, col], i) => {
+    ctx.fillStyle = hexA(col, 0.55 + 0.25 * Math.sin(t * 1.5 + i));
+    ctx.beginPath(); ctx.ellipse(x * u, h - 0.3 * u, 0.16 * u, 0.32 * u, 0, Math.PI, 0); ctx.fill();
+  });
+  // Rock walls on both sides.
+  ctx.fillStyle = '#050B1A';
+  ARENA_ROCKS.forEach((rocks, side) => {
+    ctx.beginPath(); ctx.moveTo(side ? w : 0, 0);
+    rocks.forEach((r) => ctx.lineTo(side ? w - r.w * u : r.w * u, r.y * u));
+    ctx.lineTo(side ? w : 0, h); ctx.fill();
+  });
+  // Marine snow.
+  ctx.fillStyle = 'rgba(220,235,255,.35)';
+  ARENA_SNOW.forEach((p) => {
+    const y = (p.y + t * p.v) % ARENA.h, x = p.x + Math.sin(t * 0.5 + p.y) * 0.1;
+    ctx.beginPath(); ctx.arc(x * u, y * u, p.s * u, 0, Math.PI * 2); ctx.fill();
+  });
+  // Foes, then the Guardian on top.
+  a.foes.forEach((f) => drawFoe(ctx, f, me, u));
+  drawGuardian(ctx, me, u, t, lampColor);
+  // Harpoon light-bolts and bursts.
+  a.shots.forEach((s) => {
+    if (s.kind === 'burst') {
+      const k = 1 - s.t / 0.45;
+      ctx.strokeStyle = hexA(s.color, 1 - k); ctx.lineWidth = 2;
+      for (let i = 0; i < 5; i++) { const an = i * 1.26 + s.x; ctx.beginPath(); ctx.arc((s.x + Math.cos(an) * s.r * k) * u, (s.y + Math.sin(an) * s.r * k - k * 0.4) * u, (0.06 + 0.05 * k) * u, 0, Math.PI * 2); ctx.stroke(); }
+      return;
+    }
+    ctx.strokeStyle = s.crit ? '#FFC46B' : '#9BF0E0';
+    ctx.lineWidth = s.crit ? 4 : 2.5;
+    ctx.globalAlpha = Math.min(1, s.t * 10);
+    ctx.beginPath(); ctx.moveTo(s.x1 * u, s.y1 * u); ctx.lineTo(s.x2 * u, s.y2 * u); ctx.stroke();
+    ctx.globalAlpha = 1;
+  });
+  // Darkness creeping in from the edges.
+  const vig = ctx.createRadialGradient(w / 2, h * 0.55, h * 0.35, w / 2, h * 0.55, w * 0.75);
+  vig.addColorStop(0, 'rgba(2,5,14,0)'); vig.addColorStop(1, 'rgba(2,5,14,.7)');
+  ctx.fillStyle = vig; ctx.fillRect(0, 0, w, h);
+  // Damage numbers.
+  ctx.textAlign = 'center';
+  a.pops.forEach((p) => {
+    ctx.font = `800 ${Math.round(u * (p.crit ? 0.5 : 0.38))}px DM Sans, sans-serif`;
+    ctx.fillStyle = p.color ? hexA(p.color, p.t * 2) : p.crit ? hexA('#FFC46B', p.t * 2) : `rgba(235,245,255,${Math.min(1, p.t * 2)})`;
+    ctx.fillText(p.text, p.x * u, (p.y - (0.7 - p.t) * 0.8) * u);
+  });
+  // Foes left, top left.
+  if (a.phase === 'fight') {
+    ctx.textAlign = 'left'; ctx.font = `700 ${Math.round(u * 0.36)}px DM Sans, sans-serif`; ctx.fillStyle = 'rgba(235,245,255,.75)';
+    ctx.fillText(`${a.foes.filter((f) => !f.crab).length + a.queue.length} of ${a.total} left`, u * 0.3, u * 0.55);
+  } else if (a.phase === 'idle' && !S.battle.auto) {
+    ctx.textAlign = 'center'; ctx.font = `700 ${Math.round(u * 0.4)}px DM Sans, sans-serif`; ctx.fillStyle = 'rgba(235,245,255,.7)';
+    ctx.fillText('Tap Fight to hold the floor', w / 2, u * 1.1);
+  }
+  if (a.banner) drawBanner(ctx, a.banner, w, h, u);
+}
+// "#RRGGBB" → rgba() with the given alpha.
+function hexA(hex, alpha) {
+  const n = parseInt(hex.slice(1), 16);
+  return `rgba(${n >> 16},${(n >> 8) & 255},${n & 255},${Math.max(0, Math.min(1, alpha))})`;
+}
+function hpBar(ctx, x, y, bw, frac, color) {
+  ctx.fillStyle = 'rgba(2,5,14,.75)'; ctx.fillRect(x - bw / 2, y, bw, 4);
+  ctx.fillStyle = color; ctx.fillRect(x - bw / 2, y, bw * Math.max(0, frac), 4);
+}
+function drawGuardian(ctx, me, u, t, lampColor) {
+  const x = me.x * u, y = (me.y + Math.sin(t * 2) * 0.05) * u, r = 0.6 * u, f = me.face;
+  const crown = gearItem(S.gear.equipped.crown);
+  const crownColor = crown ? GEAR_RARITY[crown.rarity].color : '#4C6E78';
+  const shell = gearItem(S.gear.equipped.shell);
+  ctx.save();
+  if (isUprising()) {
+    // Your shoal: a big glowing fish leading two small ones.
+    [[-0.55, -0.35], [-0.6, 0.35]].forEach(([ox, oy], i) => {
+      ctx.fillStyle = '#5CF2D6'; const sx = x + ox * u * f, sy = y + oy * u + Math.sin(t * 3 + i) * 3;
+      ctx.beginPath(); ctx.ellipse(sx, sy, r * 0.35, r * 0.2, 0, 0, Math.PI * 2); ctx.fill();
+    });
+    ctx.fillStyle = me.hurt > 0 ? '#FF8A8A' : '#6FE3A5';
+    ctx.beginPath(); ctx.ellipse(x, y, r, r * 0.62, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(x - f * r * 0.9, y); ctx.lineTo(x - f * r * 1.5, y - r * 0.5); ctx.lineTo(x - f * r * 1.5, y + r * 0.5); ctx.fill();
+    ctx.fillStyle = '#04211C'; ctx.beginPath(); ctx.arc(x + f * r * 0.45, y - r * 0.12, r * 0.13, 0, Math.PI * 2); ctx.fill();
+  } else {
+    // The Guardian: a deep-sea diver with a glass helmet, harpoon and lantern.
+    // Its suit takes the colour of the equipped shell.
+    ctx.fillStyle = me.hurt > 0 ? '#FF8A8A' : (shell ? GEAR_RARITY[shell.rarity].color : '#9DB8FF');
+    ctx.beginPath(); ctx.ellipse(x, y + r * 0.55, r * 0.62, r * 0.55, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#172848'; ctx.strokeStyle = '#9DB8FF'; ctx.lineWidth = 2.5;
+    ctx.beginPath(); ctx.arc(x, y - r * 0.2, r * 0.55, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = 'rgba(157,184,255,.5)'; ctx.beginPath(); ctx.arc(x + f * r * 0.12, y - r * 0.2, r * 0.28, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = '#FFC46B'; ctx.lineWidth = 3.5; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(x + f * r * 0.3, y + r * 0.6); ctx.lineTo(x + f * r * 1.25, y + r * 0.15); ctx.stroke();
+  }
+  // Lantern on the off side, glowing in the lantern's rarity colour.
+  const lx = x - f * r * 0.85, ly = y + r * 0.45;
+  const glow = ctx.createRadialGradient(lx, ly, 0, lx, ly, r * 0.7);
+  glow.addColorStop(0, hexA(lampColor, 0.9)); glow.addColorStop(1, hexA(lampColor, 0));
+  ctx.fillStyle = glow; ctx.beginPath(); ctx.arc(lx, ly, r * 0.7, 0, Math.PI * 2); ctx.fill();
+  // Crown, coloured by the crown's rarity.
+  ctx.strokeStyle = crownColor; ctx.lineWidth = 2.5; ctx.lineJoin = 'round';
+  const cy = isUprising() ? y - r * 0.55 : y - r * 0.75;
+  ctx.beginPath(); ctx.moveTo(x - r * 0.35, cy); ctx.lineTo(x - r * 0.22, cy - r * 0.35); ctx.lineTo(x, cy - r * 0.12);
+  ctx.lineTo(x + r * 0.22, cy - r * 0.35); ctx.lineTo(x + r * 0.35, cy); ctx.stroke();
+  ctx.restore();
+  hpBar(ctx, x, (me.y - 1.3) * u, u * 1.2, me.hp / me.max, '#6FE3A5');
+}
+function drawFoe(ctx, f, me, u) {
+  const dir = f.crab ? f.dir : me.x < f.x ? -1 : 1;
+  const lunge = (f.lunge || 0) * 1.2 * dir;
+  const x = (f.x + lunge) * u, y = (f.y + Math.sin(f.t * 2.5) * 0.06) * u, r = f.size * u;
+  const col = f.hurt > 0 ? '#FFFFFF' : f.kind.color, wig = Math.sin(f.t * 8);
+  ctx.save();
+  if (f.elite || f.boss || f.crab) {
+    const halo = ctx.createRadialGradient(x, y, r * 0.3, x, y, r * 1.9);
+    const hc = f.boss ? '#E58BFF' : f.crab ? '#FFE08A' : '#FFC46B';
+    halo.addColorStop(0, hexA(hc, 0.35)); halo.addColorStop(1, hexA(hc, 0));
+    ctx.fillStyle = halo; ctx.beginPath(); ctx.arc(x, y, r * 1.9, 0, Math.PI * 2); ctx.fill();
+  }
+  ctx.fillStyle = col; ctx.strokeStyle = col; ctx.lineCap = 'round';
+  const eye = (ex, ey, er, c) => { ctx.fillStyle = c; ctx.beginPath(); ctx.arc(ex, ey, er, 0, Math.PI * 2); ctx.fill(); ctx.fillStyle = col; };
+  switch (f.kind.shape) {
+    case 'lantern': // small fish with a glowing lure
+      ctx.beginPath(); ctx.ellipse(x, y, r, r * 0.6, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.moveTo(x - dir * r * 0.9, y); ctx.lineTo(x - dir * r * 1.5, y - r * 0.5 * (1 + wig * 0.3)); ctx.lineTo(x - dir * r * 1.5, y + r * 0.5); ctx.fill();
+      ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(x + dir * r * 0.3, y - r * 0.5); ctx.quadraticCurveTo(x + dir * r * 0.9, y - r * 1.4, x + dir * r * 1.3, y - r * 0.8); ctx.stroke();
+      eye(x + dir * r * 1.3, y - r * 0.8, r * 0.28, '#FFF3B0'); eye(x + dir * r * 0.5, y - r * 0.1, r * 0.14, '#050C1C');
+      break;
+    case 'eel': // long wavy body
+      ctx.lineWidth = r * 0.7;
+      ctx.beginPath(); ctx.moveTo(x + dir * r, y);
+      for (let i = 1; i <= 6; i++) ctx.lineTo(x + dir * r - dir * i * r * 0.45, y + Math.sin(f.t * 6 - i) * r * 0.35);
+      ctx.stroke();
+      ctx.beginPath(); ctx.arc(x + dir * r, y, r * 0.55, 0, Math.PI * 2); ctx.fill();
+      eye(x + dir * r * 1.2, y - r * 0.15, r * 0.14, '#050C1C');
+      break;
+    case 'squid': case 'kraken': { // dome with trailing tentacles
+      const arms = f.kind.shape === 'kraken' ? 7 : 5;
+      ctx.lineWidth = Math.max(2, r * 0.18);
+      for (let i = 0; i < arms; i++) {
+        const ax = x - r * 0.7 + (i / (arms - 1)) * r * 1.4;
+        ctx.beginPath(); ctx.moveTo(ax, y + r * 0.2);
+        ctx.quadraticCurveTo(ax + Math.sin(f.t * 3 + i) * r * 0.5, y + r * 0.9, ax + Math.sin(f.t * 3 + i + 1) * r * 0.4, y + r * 1.4); ctx.stroke();
+      }
+      ctx.beginPath(); ctx.ellipse(x, y - r * 0.1, r * 0.85, r * 0.75, 0, Math.PI, 0); ctx.lineTo(x + r * 0.85, y + r * 0.25); ctx.lineTo(x - r * 0.85, y + r * 0.25); ctx.fill();
+      eye(x - r * 0.3, y - r * 0.1, r * 0.16, '#FF3A5C'); eye(x + r * 0.3, y - r * 0.1, r * 0.16, '#FF3A5C');
+      break;
+    }
+    case 'isopod': // segmented armoured oval
+      ctx.beginPath(); ctx.ellipse(x, y, r * 1.1, r * 0.7, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = 'rgba(5,12,28,.55)'; ctx.lineWidth = 1.5;
+      for (let i = -2; i <= 2; i++) { ctx.beginPath(); ctx.moveTo(x + i * r * 0.32, y - r * 0.62); ctx.lineTo(x + i * r * 0.32, y + r * 0.62); ctx.stroke(); }
+      ctx.strokeStyle = col;
+      for (let i = -2; i <= 2; i++) { ctx.beginPath(); ctx.moveTo(x + i * r * 0.32, y + r * 0.6); ctx.lineTo(x + i * r * 0.32 + wig * 2, y + r * 0.95); ctx.stroke(); }
+      eye(x + dir * r * 0.85, y - r * 0.2, r * 0.12, '#050C1C');
+      break;
+    case 'shark': // long body with frilled gills
+      ctx.beginPath(); ctx.moveTo(x + dir * r * 1.3, y); ctx.quadraticCurveTo(x, y - r * 0.8, x - dir * r * 1.1, y); ctx.quadraticCurveTo(x, y + r * 0.7, x + dir * r * 1.3, y); ctx.fill();
+      ctx.beginPath(); ctx.moveTo(x - dir * r, y); ctx.lineTo(x - dir * r * 1.6, y - r * 0.6 * (1 + wig * 0.2)); ctx.lineTo(x - dir * r * 1.5, y + r * 0.5); ctx.fill();
+      ctx.strokeStyle = '#FF8FD0'; ctx.lineWidth = 1.5;
+      for (let i = 0; i < 3; i++) { ctx.beginPath(); ctx.moveTo(x + dir * r * (0.5 - i * 0.15), y - r * 0.35); ctx.lineTo(x + dir * r * (0.5 - i * 0.15), y + r * 0.35); ctx.stroke(); }
+      eye(x + dir * r * 0.95, y - r * 0.15, r * 0.12, '#FFF3C4');
+      break;
+    case 'diver': // a human diver in a suit, with a glass mask
+      ctx.beginPath(); ctx.ellipse(x - dir * r * 0.2, y, r * 1.1, r * 0.5, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.moveTo(x - dir * r * 1.2, y); ctx.lineTo(x - dir * r * 1.8, y - r * 0.4 + wig * 3); ctx.lineTo(x - dir * r * 1.8, y + r * 0.4 - wig * 3); ctx.fill();
+      ctx.fillStyle = '#4C6E78'; ctx.fillRect(x - r * 0.7, y - r * 0.85, r * 1.1, r * 0.35);
+      eye(x + dir * r * 0.95, y - r * 0.1, r * 0.38, '#9BF0E0');
+      break;
+    case 'drone': // boxy drone with a red eye and rotors
+      ctx.fillRect(x - r * 0.8, y - r * 0.6, r * 1.6, r * 1.2);
+      ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(x - r * 1.2, y - r * 0.8 + wig * 2); ctx.lineTo(x - r * 0.4, y - r * 0.8 - wig * 2);
+      ctx.moveTo(x + r * 0.4, y - r * 0.8 - wig * 2); ctx.lineTo(x + r * 1.2, y - r * 0.8 + wig * 2); ctx.stroke();
+      eye(x + dir * r * 0.35, y, r * 0.25, '#FF3A3A');
+      break;
+    case 'sub': case 'ship': { // capsule hull with portholes and a propeller
+      const big = f.kind.shape === 'ship';
+      ctx.beginPath(); ctx.ellipse(x, y, r * (big ? 1.4 : 1.2), r * (big ? 0.6 : 0.65), 0, 0, Math.PI * 2); ctx.fill();
+      if (big) ctx.fillRect(x - r * 0.5, y - r * 1.05, r * 0.9, r * 0.5);
+      ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(x - dir * r * 1.3, y - r * 0.4 * wig); ctx.lineTo(x - dir * r * 1.3, y + r * 0.4 * wig); ctx.stroke();
+      for (let i = 0; i < (big ? 3 : 2); i++) eye(x + dir * r * (0.6 - i * 0.5), y - r * 0.1, r * 0.17, '#FFF3B0');
+      break;
+    }
+    case 'chest': { // hermit crab carrying a sunken chest: legs, claws, eye stalks, glowing seam
+      const d = f.dir;
+      ctx.strokeStyle = '#FF7A5C'; ctx.lineWidth = 2.5;
+      for (let i = -1; i <= 1; i++) { ctx.beginPath(); ctx.moveTo(x + i * r * 0.5, y + r * 0.4); ctx.lineTo(x + i * r * 0.7 + Math.sin(f.t * 14 + i) * 3, y + r * 0.95); ctx.stroke(); }
+      ctx.fillStyle = '#FF7A5C'; ctx.beginPath(); ctx.arc(x + d * r * 1.05, y + r * 0.1, r * 0.25, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.moveTo(x + d * r * 0.5, y - r * 0.3); ctx.lineTo(x + d * r * 0.6, y - r * 0.85); ctx.moveTo(x + d * r * 0.75, y - r * 0.3); ctx.lineTo(x + d * r * 0.9, y - r * 0.8); ctx.stroke();
+      eye(x + d * r * 0.6, y - r * 0.85, r * 0.1, '#050C1C'); eye(x + d * r * 0.9, y - r * 0.8, r * 0.1, '#050C1C');
+      ctx.fillStyle = f.hurt > 0 ? '#FFFFFF' : '#8A5A2B'; ctx.fillRect(x - r * 0.75, y - r * 0.35, r * 1.5, r * 0.8);
+      ctx.fillStyle = f.hurt > 0 ? '#FFFFFF' : '#A8733A'; ctx.beginPath(); ctx.ellipse(x, y - r * 0.35, r * 0.75, r * 0.35, 0, Math.PI, 0); ctx.fill();
+      ctx.fillStyle = hexA('#FFC46B', 0.7 + 0.3 * Math.sin(f.t * 5)); ctx.fillRect(x - r * 0.75, y - r * 0.38, r * 1.5, r * 0.08);
+      ctx.fillStyle = '#FFC46B'; ctx.fillRect(x - r * 0.1, y - r * 0.3, r * 0.2, r * 0.25);
+      break;
+    }
+    default:
+      ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+  }
+  ctx.restore();
+  hpBar(ctx, x, y - r - 0.3 * u, Math.max(u * 0.6, r * 1.6), f.hp / f.max, f.boss ? '#E58BFF' : f.crab ? '#FFE08A' : f.elite ? '#FFC46B' : '#FF6B6B');
+}
+// The victory / defeat band across the middle, fading in and out.
+function drawBanner(ctx, bn, w, h, u) {
+  const k = bn.t / ARENA.bannerSecs, alpha = Math.min(1, (1 - k) * 6, k * 4);
+  const col = bn.won ? '#FFC46B' : '#FF6B6B';
+  ctx.globalAlpha = alpha;
+  const band = ctx.createLinearGradient(0, 0, w, 0);
+  band.addColorStop(0, 'rgba(3,8,22,0)'); band.addColorStop(0.2, 'rgba(3,8,22,.82)'); band.addColorStop(0.8, 'rgba(3,8,22,.82)'); band.addColorStop(1, 'rgba(3,8,22,0)');
+  ctx.fillStyle = band; ctx.fillRect(0, h * 0.3, w, h * 0.36);
+  ctx.strokeStyle = hexA(col, 0.6); ctx.lineWidth = 1.5;
+  [0.3, 0.66].forEach((f) => { ctx.beginPath(); ctx.moveTo(w * 0.1, h * f); ctx.lineTo(w * 0.9, h * f); ctx.stroke(); });
+  ctx.textAlign = 'center';
+  // The title lands slightly big and settles.
+  let size = u * 0.95 * (1 + Math.max(0, k - 0.8));
+  ctx.font = `800 ${Math.round(size)}px Unbounded, sans-serif`;
+  // Long titles shrink to fit the width.
+  const tw = ctx.measureText(bn.text.toUpperCase()).width;
+  if (tw > w * 0.86) { size *= (w * 0.86) / tw; ctx.font = `800 ${Math.round(size)}px Unbounded, sans-serif`; }
+  ctx.shadowColor = col; ctx.shadowBlur = 18;
+  ctx.fillStyle = col; ctx.fillText(bn.text.toUpperCase(), w / 2, h * 0.5);
+  ctx.shadowBlur = 0;
+  ctx.font = `700 ${Math.round(u * 0.36)}px DM Sans, sans-serif`;
+  ctx.fillStyle = bn.won ? '#9BF0E0' : 'rgba(235,245,255,.8)';
+  ctx.fillText(bn.sub, w / 2, h * 0.6);
+  ctx.globalAlpha = 1;
 }
 function openBubble() {
   const cost = bubbleCost();
@@ -1968,13 +2536,7 @@ function openBubble() {
   save();
   updateUI();
 }
-function battleTick(now) {
-  if (S.battle.auto && !tideFull() && $('modal').hidden && now >= (ui.nextAutoFight || 0)) {
-    ui.nextAutoFight = now + BAT.autoSecs * 1000;
-    fight();
-  }
-}
-$('fightBtn').addEventListener('click', fight);
+$('fightBtn').addEventListener('click', startFight);
 $('bSlots').addEventListener('click', (e) => {
   const b = e.target.closest('[data-slot]');
   if (b) { Sound.click(); openWheel(b.dataset.slot); }
@@ -1982,7 +2544,7 @@ $('bSlots').addEventListener('click', (e) => {
 $('bubble').addEventListener('click', openBubble);
 $('autoBtn').addEventListener('click', () => {
   S.battle.auto = !S.battle.auto;
-  ui.nextAutoFight = Date.now() + 600;
+  arenaState().wait = 0.6;
   Sound.click();
   save();
   updateUI();
@@ -2009,10 +2571,9 @@ $('bDrops').addEventListener('click', (e) => {
   updateUI();
 });
 function renderBattle() {
-  syncArenaArt();
+  $('bZoneLabel').textContent = isUprising() ? 'Trench uprising · ' : 'Twilight Trench · ';
   const b = S.battle;
   const tier = tierOf(b.diff);
-  const foe = foeOf();
   $('bTier').textContent = tier.name;
   $('bTier').style.color = tier.color;
   $('bStage').textContent = stageLabel();
@@ -2020,12 +2581,6 @@ function renderBattle() {
   $('bLine').textContent = 'Wave ' + b.wave + '/9 · Level ' + b.level + '/10';
   $('bPips').innerHTML = Array.from({ length: 10 }, (_, i) =>
     `<i class="${i < b.level - 1 ? 'done' : i === b.level - 1 ? 'now' : ''}"></i>`).join('');
-  $('foeName').textContent = (isBossStage() ? 'Boss: ' : '') + foe.name;
-  $('foeName').style.color = foe.color;
-  $('foeBody').setAttribute('fill', foe.color);
-  $('foeTail').setAttribute('fill', foe.color);
-  const crown = gearItem(S.gear.equipped.crown);
-  $('gCrown').setAttribute('stroke', crown ? GEAR_RARITY[crown.rarity].color : '#4C6E78');
   $('bLog').textContent = b.log || (isUprising()
     ? 'Your shoal is taking the trench back. Drive the divers out: wins pay Lumen and can drop the gear they stole.'
     : 'Your Guardian fights on its own with the gear below. Wins pay Lumen and can drop a sunken chest; the bubble opens more gear.');
@@ -2047,26 +2602,29 @@ function renderBattle() {
     return `<button type="button" class="bslot" data-slot="${slot}" style="--rc:${c}" aria-label="${GEAR_SLOTS[slot].name} slot: open the slot wheel"><span class="label">${GEAR_SLOTS[slot].name}</span><span class="gicon">${gearIcon(slot, c, 20)}</span>
       <b>${g ? g.name : 'Empty'}</b><span class="small" style="color:${c}">${g || slotAdd(slot) > 0 ? slotStat(slot) : '—'}</span><span class="slot-bonus">${slotLine(slot)} · spin</span></button>`;
   }).join('');
-  // Loser's health bar drains, then both refill for the next fight.
-  $('myHp').style.width = ui.hpAnim === 'me' ? '0%' : '100%';
-  $('foeHp').style.width = ui.hpAnim === 'foe' ? '0%' : '100%';
-  if (ui.hpAnim) {
-    ui.hpAnim = null;
-    setTimeout(() => { $('myHp').style.width = '100%'; $('foeHp').style.width = '100%'; }, 650);
-  }
+  // Gear changed mid-fight: the Guardian picks up the new stats, keeping its share of health.
+  const a = arenaState(), st = guardianStats();
+  if (a.phase === 'fight') { a.me.hp *= st.hp / a.me.max; a.me.max = st.hp; a.st = st; }
+  const stat = (icon, label, val) => `<div class="bstat" title="${label}" aria-label="${label} ${val}"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="${icon}"/></svg><b>${val}</b></div>`;
+  $('bStats').innerHTML = stat('M12 20s-7-4.5-7-10a4 4 0 0 1 7-2.5A4 4 0 0 1 19 10c0 5.5-7 10-7 10z', 'Health', fmt(st.hp))
+    + stat('M4 20L14 10M14 10l2-6 4 4-6 2M6 14l4 4', 'Attack', fmt(st.atk))
+    + stat('M12 3l7 3v6c0 4-3 7-7 9-4-2-7-5-7-9V6z', 'Armour', fmtInt(Math.round(st.armour)))
+    + stat('M12 3l2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5z', 'Crit chance', Math.round(st.crit * 100) + '%');
+  const pk = stagePack();
+  $('bFoes').innerHTML = `<span>${pk.boss ? 'Boss + ' + pk.n + ' foes' : pk.n + ' foes' + (pk.elites ? ' · ' + pk.elites + ' elite' : '')}</span><span>${fmt(pk.hp)} health · ${fmt(pk.atk)} bite each</span>`;
 }
 function updateBattle() {
   if (ui.battleDirty) { renderBattle(); ui.battleDirty = false; }
   $('bLumen').textContent = fmt(S.lumen) + ' Lumen · wins pay +' + fmt(winReward());
   $('bPearl').textContent = 'Shadow Pearls: ' + fmtInt(S.pearls);
-  $('bPower').textContent = 'Power ' + fmt(guardianPower()) + ' vs ' + fmt(foePower());
+  $('bPower').textContent = 'Power ' + fmt(guardianPower()) + ' vs ' + fmt(stagePower());
   const n = bubbleCount();
   $('bubble').innerHTML = `×${n}<span>${fmt(bubbleCost())}</span>`;
   $('bubble').disabled = S.lumen < bubbleCost();
   $('bubble').setAttribute('aria-label', `Lumen bubble: open ${n} gear for ${fmt(bubbleCost())} Lumen`);
   $('autoBtn').textContent = S.battle.auto ? 'Auto: on' : 'Auto: off';
   $('autoBtn').setAttribute('aria-pressed', String(S.battle.auto));
-  $('fightBtn').disabled = tideFull();
+  $('fightBtn').disabled = tideFull() || arenaState().phase !== 'idle';
 }
 
 // ---- Ember Wastes: tower defense ---------------------------------------------
@@ -2074,8 +2632,15 @@ function updateBattle() {
 // your reef; towers put them out. Each snuffed fire drops Ash (the zone's currency, which
 // feeds the tide). Waves get hotter; if the fire reaches the reef too often you fall back
 // one wave. The tide washes the towers away, like the garden and the reef.
-const TD = { cols: 7, rows: 10, spawnGap: 0.9, waveGap: 2 };
-const TD_PATH = [[3, -1], [3, 1], [1, 1], [1, 4], [5, 4], [5, 7], [2, 7], [2, 9], [2, 10]];
+// Some fires go off when they die: towers within their blast radius grey out for
+// blastSecs (not topped up if already grey), and after one blast no other can go off for
+// blastCd. Every shiftEvery waves the lava finds a new route and crushes towers in its way.
+// Every enemy that reaches the reef also costs leakPearls Ember Pearls (never below zero).
+const TD = { cols: 7, rows: 10, spawnGap: 0.9, waveGap: 2, blastSecs: 5, blastCd: 5, shiftEvery: 15, leakPearls: 3e6 };
+// The lava's route: corner points from just above the map down to the reef. It starts on
+// this route and shifts to a random one every shiftEvery waves (saved in S.ember.path).
+const TD_START_PATH = [[3, -1], [3, 1], [1, 1], [1, 4], [5, 4], [5, 7], [2, 7], [2, 9], [2, 10]];
+let TD_PATH, TD_CELLS, TD_LEN;
 const TOWERS = {
   spout: { name: 'Water spout', short: 'Spout', cost: 2000, dmg: 3, range: 1.8, rate: 0.45, color: '#6FB8FF', desc: 'Fast single jets' },
   pump: { name: 'Coral pump', short: 'Pump', cost: 6000, dmg: 1, range: 1.5, rate: 0.8, color: '#5CF2D6', desc: 'Hits all nearby, slows fires' },
@@ -2089,7 +2654,7 @@ const TOWERS = {
 const LOADOUT_SIZE = 3;
 const towerUnlocked = (k) => (S.ember.best || 0) >= (TOWERS[k].unlock || 0);
 const loadout = () => (S.ember.loadout || ['spout', 'pump', 'cannon']).filter((k) => TOWERS[k]);
-// Tower upgrades: bought with Ash and washed away by the tide, like the towers.
+// Tower upgrades: bought with Ash and kept, like the towers (the Ember Wastes has no tide).
 const EMBER_UPS = [
   { id: 'power', name: 'High pressure', desc: 'All towers ×1.4 damage', base: 4000, growth: 3 },
   { id: 'rapid', name: 'Rapid valves', desc: 'Towers fire 8% faster', base: 5000, growth: 3, max: 5 },
@@ -2101,24 +2666,87 @@ const EMBER_UPS = [
 ];
 const eUp = (id) => (S.ember.up && S.ember.up[id]) || 0;
 const emberUpCost = (u) => Math.ceil(u.base * Math.pow(u.growth, eUp(u.id)) * depthCost());
-const towerRange = (t) => TOWERS[t.type].range * (1 + 0.1 * eUp('reach'));
+const towerRange = (t) => (TOWERS[t.type].range + (t.evo ? EVO.reach : 0)) * (1 + 0.1 * eUp('reach'));
 const sellRate = () => 0.6 + 0.08 * eUp('salvage');
+// ---- Tower evolution ------------------------------------------------------------
+// A maxed tower can spin the evolution wheel. Success grows it into a neighbouring tile
+// (an empty one if there is one, else swallowing the tower there, no refund) with more
+// damage, speed and reach, and an aura for every tower touching it. Failure drops it
+// back to Lv 1 with no refund.
+const EVO = { dmg: 3, rate: 0.8, reach: 0.6, auraDmg: 1.25, auraRate: 0.9 };
+const EVO_NAMES = { spout: 'Geyser', pump: 'Reef heart', cannon: 'Tsunami cannon', whale: 'Leviathan', eel: 'Storm eel', frost: 'Glacier vent', clam: 'Giant clam' };
+const towerCells = (t) => (t.evo ? [[t.c, t.r], [t.c2, t.r2]] : [[t.c, t.r]]);
+const towerAt = (c, r) => S.ember.towers.find((t) => towerCells(t).some(([x, y]) => x === c && y === r));
+const towerCenter = (t) => (t.evo ? [(t.c + t.c2) / 2 + 0.5, (t.r + t.r2) / 2 + 0.5] : [t.c + 0.5, t.r + 0.5]);
+const towerName = (t) => (t.evo ? EVO_NAMES[t.type] : TOWERS[t.type].name);
+const sellValue = (t) => Math.floor(towerCost(t.type, t.lvl) * sellRate() * (t.evo ? 2 : 1));
+// Touching either tile of an evolved tower, diagonals included.
+const nearEvolved = (t) => S.ember.towers.some((o) => o.evo && o !== t
+  && towerCells(o).some(([oc, or]) => towerCells(t).some(([c, r]) => Math.abs(oc - c) <= 1 && Math.abs(or - r) <= 1)));
+// Where an evolving tower would grow: right, down, left or up, an empty tile first.
+function evoSpot(t) {
+  const open = [[1, 0], [0, 1], [-1, 0], [0, -1]].map(([dc, dr]) => [t.c + dc, t.r + dr])
+    .filter(([c, r]) => c >= 0 && c < TD.cols && r >= 0 && r < TD.rows && !TD_CELLS.has(c + ',' + r));
+  const empty = open.find(([c, r]) => !towerAt(c, r));
+  if (empty) return { c: empty[0], r: empty[1], eats: null };
+  const taken = open.find(([c, r]) => !towerAt(c, r).evo);
+  return taken ? { c: taken[0], r: taken[1], eats: towerAt(taken[0], taken[1]) } : null;
+}
 const clamBoost = (t) => (S.ember.towers.some((o) => o.type === 'clam' && o !== t && Math.abs(o.c - t.c) <= 1 && Math.abs(o.r - t.r) <= 1) ? 1.3 : 1);
 const TD_MAX_LVL = 5;
-// Path cells and the walking line through their centres.
-const TD_CELLS = (() => {
-  const set = new Set();
-  for (let i = 0; i < TD_PATH.length - 1; i++) {
-    const [c1, r1] = TD_PATH[i], [c2, r2] = TD_PATH[i + 1];
+// Sets the route: its cells and the walking line through their centres.
+function setPath(pts) {
+  TD_PATH = pts;
+  TD_CELLS = new Set();
+  for (let i = 0; i < pts.length - 1; i++) {
+    const [c1, r1] = pts[i], [c2, r2] = pts[i + 1];
     const steps = Math.max(Math.abs(c2 - c1), Math.abs(r2 - r1));
     for (let s = 0; s <= steps; s++) {
       const c = c1 + Math.sign(c2 - c1) * s, r = r1 + Math.sign(r2 - r1) * s;
-      if (r >= 0 && r < TD.rows) set.add(c + ',' + r);
+      if (r >= 0 && r < TD.rows) TD_CELLS.add(c + ',' + r);
     }
   }
-  return set;
-})();
-const TD_LEN = TD_PATH.slice(1).reduce((s, p, i) => s + Math.hypot(p[0] - TD_PATH[i][0], p[1] - TD_PATH[i][1]), 0);
+  TD_LEN = pts.slice(1).reduce((sum, p, i) => sum + Math.hypot(p[0] - pts[i][0], p[1] - pts[i][1]), 0);
+  ui.tdBg = null; // the ground is cached around the path, so redraw it
+}
+setPath(TD_START_PATH);
+const savedPath = () => (Array.isArray(S.ember.path) && S.ember.path.length > 2 ? S.ember.path : TD_START_PATH);
+// A random route: down from the top, across in runs of 2+ columns, rows 2-3 apart, to the reef.
+function randomPath() {
+  const ri = (a, b) => a + Math.floor(Math.random() * (b - a + 1));
+  let c = ri(1, TD.cols - 2), r = ri(1, 2);
+  const pts = [[c, -1]];
+  while (r < TD.rows - 1) {
+    pts.push([c, r]);
+    let nc;
+    do { nc = ri(0, TD.cols - 1); } while (Math.abs(nc - c) < 2);
+    pts.push([nc, r]);
+    c = nc;
+    r += ri(2, 3);
+  }
+  pts.push([c, TD.rows]);
+  return pts;
+}
+// The lava finds a new route; towers in its way are lost with no refund.
+function shiftLava() {
+  const td = tdState(), e = S.ember;
+  let pts;
+  do { pts = randomPath(); } while (JSON.stringify(pts) === JSON.stringify(TD_PATH));
+  setPath(pts);
+  e.path = pts;
+  e.shiftPending = false;
+  const onLava = (t) => towerCells(t).some(([c, r]) => TD_CELLS.has(c + ',' + r));
+  const lost = e.towers.filter(onLava);
+  e.towers = e.towers.filter((t) => !onLava(t));
+  lost.forEach((t) => { const [x, y] = towerCenter(t); td.puffs.push({ x, y, r: 0.9, t: 0.6 }); });
+  td.sel = null;
+  e.log = 'The lava found a new way down' + (lost.length ? `, swallowing ${lost.length} ${lost.length === 1 ? 'tower' : 'towers'}.` : '. All your towers are safe.');
+  td.banner = { won: false, text: 'The lava shifts', sub: lost.length ? lost.length + (lost.length === 1 ? ' tower lost' : ' towers lost') : 'All towers safe', t: ARENA.bannerSecs };
+  td.flash = 0.6;
+  Sound.descend();
+  ui.emberDirty = true;
+  save();
+}
 function pathPoint(d) {
   for (let i = 0; i < TD_PATH.length - 1; i++) {
     const [c1, r1] = TD_PATH[i], [c2, r2] = TD_PATH[i + 1];
@@ -2132,13 +2760,57 @@ function pathPoint(d) {
 const emberMaxHp = () => 20 + 10 * rank('ember', 'firebreak') + 5 * eUp('wall');
 const depthCost = () => Math.pow(BAL.depthMult, S.depthMarks);
 const towerCost = (type, lvl = 0) => Math.ceil(TOWERS[type].cost * Math.pow(1.8, lvl) * depthCost() * (1 - 0.08 * eUp('cheap')));
-const towerDmg = (t) => TOWERS[t.type].dmg * Math.pow(1.7, t.lvl) * Math.pow(1.5, rank('ember', 'pressure')) * Math.pow(1.4, eUp('power')) * clamBoost(t);
-const towerRate = (t) => TOWERS[t.type].rate * (1 - 0.12 * rank('ember', 'quick')) * (1 - 0.08 * eUp('rapid'));
+const towerDmg = (t) => TOWERS[t.type].dmg * Math.pow(1.7, t.lvl) * Math.pow(1.5, rank('ember', 'pressure')) * Math.pow(1.4, eUp('power')) * clamBoost(t)
+  * (t.evo ? EVO.dmg : 1) * (nearEvolved(t) ? EVO.auraDmg : 1);
+const towerRate = (t) => TOWERS[t.type].rate * (1 - 0.12 * rank('ember', 'quick')) * (1 - 0.08 * eUp('rapid'))
+  * (t.evo ? EVO.rate : 1) * (nearEvolved(t) ? EVO.auraRate : 1);
 const fireHp = (w) => 10 * Math.pow(1.15, w - 1);
+// Ember Pearls for clearing wave w: half a tide fill at wave 1, +10% per wave after.
+const pearlsPerWave = (w) => Math.max(1, Math.floor(pearlsPerFill() * 0.5 * Math.pow(1.1, w - 1)));
 const ashPerFire = (w) => 600 * Math.pow(1.12, w - 1) * globalMult(false) * Math.pow(1.5, rank('ember', 'ashsift')) * (1 + 0.25 * eUp('bounty'));
 
+// Fire kinds. hp, ash and speed are multiples of the wave's base fire; leak is how much
+// reef health it burns if it gets through; blast is the radius it greys towers in as it dies. Deeper waves mix in faster, tougher and
+// stranger fires, and every 5th wave ends with an Inferno that bursts into sparks.
+const FIRE_KINDS = {
+  ember: { name: 'Ember', hp: 1, speed: 1, ash: 1, leak: 1, from: 1, weight: 10, size: 0.34 },
+  spark: { name: 'Spark', hp: 0.6, speed: 1.75, ash: 0.6, leak: 1, from: 3, weight: 6, size: 0.26 },
+  magma: { name: 'Magma blob', hp: 3, speed: 0.55, ash: 2.5, leak: 2, from: 6, weight: 4, size: 0.42, blast: 1.3 },
+  cinder: { name: 'Cinder bat', hp: 0.8, speed: 0.85, ash: 1.2, leak: 1, from: 9, weight: 4, size: 0.3, hop: true },
+  inferno: { name: 'Inferno', hp: 8, speed: 0.6, ash: 8, leak: 5, size: 0.6, boss: true, blast: 2 },
+  // Loot for the bonus wave after a boss. It never burns the reef; whatever you miss escapes.
+  pearl: { name: 'Pearl', hp: 2, speed: 1.25, ash: 0, leak: 0, size: 0.3, loot: true },
+  chest: { name: 'Treasure chest', hp: 5, speed: 0.7, ash: 0, leak: 0, size: 0.38, loot: true },
+};
+// A burning supply crate sometimes sinks through the map mid-wave. Towers (and taps)
+// can put it out; salvage it before it hits the seabed for a pile of Ash and a sunken
+// chest for your gear.
+const CRATE = { chance: 0.3, hp: 6, ash: 20, sink: 0.5, tap: 0.12 };
+// Clearing a boss wave queues a bonus wave of loot: each Pearl pays a share of that wave's
+// Pearls, each chest a sunken chest for your gear plus Ash.
+const BONUS = { pearls: 8, chests: 3, pearlShare: 0.15, chestAsh: 15 };
+// Later kinds ease in over a few waves instead of arriving at full strength.
+function pickFire(w) {
+  const pool = Object.entries(FIRE_KINDS).filter(([, k]) => !k.boss && w >= k.from)
+    .map(([id, k]) => [id, k.weight * Math.min(1, (w - k.from + 1) / 4)]);
+  let r = Math.random() * pool.reduce((s, [, wt]) => s + wt, 0);
+  for (const [id, wt] of pool) if ((r -= wt) < 0) return id;
+  return 'ember';
+}
+function makeFire(kind, w, d = 0) {
+  const k = FIRE_KINDS[kind];
+  const hp = fireHp(w) * k.hp;
+  const speed = k.boss ? k.speed : Math.min(2.2, 1 + 0.03 * w) * k.speed;
+  // Placed on the path right away: sparks from an Inferno appear between ticks.
+  const [x, y] = pathPoint(d);
+  return { kind, d, x, y, hp, max: hp, speed, slow: 0, chill: 0, boss: !!k.boss, flick: Math.random() * 6, hopIn: 1.5 + Math.random(), hurt: 0 };
+}
+
+// Game speed: tapping the button cycles these. Older saves only had a 2× switch (fast).
+const TD_SPEEDS = [1, 2, 4, 8];
+const tdSpeed = () => (TD_SPEEDS.includes(S.ember.speed) ? S.ember.speed : S.ember.fast ? 2 : 1);
 function tdState() {
-  if (!ui.td) ui.td = { fires: [], shots: [], toSpawn: 0, spawnIn: 0, between: 1.5, running: false, ashLog: [], sel: null, flash: 0 };
+  if (!ui.td) ui.td = { fires: [], shots: [], queue: [], pops: [], puffs: [], smoke: [], spawnIn: 0, between: 1.5, running: false, ashLog: [], sel: null, flash: 0, crate: null, crateIn: 0, banner: null, t: 0 };
   return ui.td;
 }
 function startWave() {
@@ -2146,35 +2818,117 @@ function startWave() {
   if (td.running || tideFull()) return;
   const w = S.ember.wave;
   td.running = true;
-  td.toSpawn = 6 + 2 * w + (w % 5 === 0 ? 1 : 0);
-  td.boss = w % 5 === 0;
   td.spawnIn = 0;
+  td.crate = null;
+  td.banner = null;
+  if (S.ember.shiftPending && !td.bonusNext) shiftLava();
+  if (td.bonusNext) {
+    // Bonus wave: shuffled Pearls and chests, sized to the boss wave just cleared.
+    td.bonus = { wave: td.bonusNext, pearls: 0, chests: 0, missed: 0 };
+    td.bonusNext = 0;
+    td.queue = Array(BONUS.pearls).fill('pearl').concat(Array(BONUS.chests).fill('chest')).sort(() => Math.random() - 0.5);
+    td.crateIn = 0;
+    td.banner = { won: true, text: 'Bonus wave', sub: 'Snuff the loot before it slips away', t: ARENA.bannerSecs };
+  } else {
+    td.bonus = null;
+    td.queue = Array.from({ length: 6 + 2 * w }, () => pickFire(w));
+    if (w % 5 === 0) td.queue.push('inferno');
+    td.crateIn = Math.random() < CRATE.chance ? 2 + Math.random() * 4 : 0;
+  }
   Sound.click();
   ui.emberDirty = true;
 }
 function snuff(fire) {
   const td = tdState();
-  const ash = ashPerFire(S.ember.wave) * (fire.boss ? 8 : 1);
+  if (FIRE_KINDS[fire.kind].loot) { lootBonus(td, fire); return; }
+  const ash = ashPerFire(S.ember.wave) * FIRE_KINDS[fire.kind].ash;
   earn(ash);
   td.ashLog.push([Date.now(), ash]);
-  td.pops = (td.pops || []).concat([{ x: fire.x, y: fire.y, t: 0.8, text: '+' + fmt(ash) }]);
-  if (fire.boss) Sound.milestone();
+  td.pops.push({ x: fire.x, y: fire.y, t: 0.8, text: '+' + fmt(ash), color: '#FFC46B' });
+  td.puffs.push({ x: fire.x, y: fire.y, r: FIRE_KINDS[fire.kind].size * 1.6, t: 0.6 });
+  const blast = FIRE_KINDS[fire.kind].blast;
+  if (blast && !(td.blastCd > 0)) {
+    S.ember.towers.forEach((t) => { const [tx, ty] = towerCenter(t); if (!(t.off > 0) && Math.hypot(tx - fire.x, ty - fire.y) <= blast) t.off = TD.blastSecs; });
+    td.blastCd = TD.blastCd;
+    td.shots.push({ kind: 'blast', x: fire.x, y: fire.y, r: blast, t: 0.5 });
+  }
+  // The Inferno bursts into three sparks as it goes out.
+  if (fire.boss) {
+    Sound.milestone();
+    for (let i = 0; i < 3; i++) { const s = makeFire('spark', S.ember.wave, Math.max(0, fire.d - 0.3 * i)); s.hp = s.max = s.hp * 1.5; td.fires.push(s); }
+  }
+}
+function lootBonus(td, f) {
+  const b = td.bonus, w = b ? b.wave : S.ember.wave;
+  if (f.kind === 'pearl') {
+    const p = Math.max(1, Math.floor(pearlsPerWave(w) * BONUS.pearlShare));
+    S.pearls += p; S.zoneEarned += p;
+    if (b) b.pearls += p;
+    td.pops.push({ x: f.x, y: f.y, t: 1, text: '+' + fmt(p), color: '#FF8FD0' });
+    Sound.perk();
+  } else {
+    const ash = ashPerFire(w) * BONUS.chestAsh;
+    earn(ash);
+    td.ashLog.push([Date.now(), ash]);
+    S.gear.chests += 1;
+    if (b) b.chests += 1;
+    td.pops.push({ x: f.x, y: f.y - 0.4, t: 1.3, text: 'Sunken chest!', color: '#FFE08A' });
+    td.pops.push({ x: f.x, y: f.y, t: 1.1, text: '+' + fmt(ash), color: '#FFC46B' });
+    Sound.milestone();
+  }
+  td.shots.push({ kind: 'sparkle', x: f.x, y: f.y, t: 0.5, color: f.kind === 'pearl' ? '#FF8FD0' : '#FFE08A' });
+}
+function salvageCrate(td) {
+  const c = td.crate;
+  const ash = ashPerFire(S.ember.wave) * CRATE.ash;
+  earn(ash);
+  td.ashLog.push([Date.now(), ash]);
+  S.gear.chests += 1;
+  td.pops.push({ x: c.x, y: c.y - 0.5, t: 1.4, text: 'Sunken chest!', color: '#FFE08A' });
+  td.pops.push({ x: c.x, y: c.y, t: 1.2, text: '+' + fmt(ash), color: '#FFC46B' });
+  td.puffs.push({ x: c.x, y: c.y, r: 1.2, t: 0.8 });
+  S.ember.log = `Salvaged a supply crate: +${fmt(ash)} Ash and a sunken chest for your gear.`;
+  td.crate = null;
+  ui.emberDirty = true;
+  Sound.milestone();
+}
+function hitFire(td, f, dmg) {
+  f.hp -= dmg;
+  f.hurt = 0.12;
+  if (dmg >= f.max * 0.4) td.pops.push({ x: f.x + (Math.random() - 0.5) * 0.3, y: f.y - 0.3, t: 0.5, text: fmt(dmg), small: true });
 }
 function waveOver(won) {
   const td = tdState();
   td.running = false;
   td.fires = [];
+  td.crate = null;
+  td.crateIn = 0;
   td.between = TD.waveGap;
   const e = S.ember;
-  if (won) {
-    earn(ashPerFire(e.wave) * 10);
+  if (td.bonus) {
+    const b = td.bonus;
+    td.bonus = null;
+    e.log = `Bonus wave: +${fmt(b.pearls)} Ember Pearls and ${b.chests} sunken ${b.chests === 1 ? 'chest' : 'chests'}${b.missed ? ` (${b.missed} got away)` : ''}.`;
+    td.banner = { won: true, text: 'Bonus collected', sub: '+' + fmt(b.pearls) + ' Pearls · ' + b.chests + (b.chests === 1 ? ' chest' : ' chests'), t: ARENA.bannerSecs };
+    Sound.buy();
+    if (e.shiftPending) { const log = e.log; shiftLava(); e.log = log + ' ' + e.log; }
+  } else if (won) {
+    const bonus = ashPerFire(e.wave) * 10 * (1 + rank('ember', 'cistern'));
+    if (e.wave % 5 === 0) td.bonusNext = e.wave;
+    if (e.wave % TD.shiftEvery === 0 && e.wave > (e.pathAt || 0)) { e.pathAt = e.wave; e.shiftPending = true; }
+    const pearls = pearlsPerWave(e.wave);
+    earn(bonus);
+    S.pearls += pearls;
+    S.zoneEarned += pearls;
     e.best = Math.max(e.best, e.wave);
     e.wave += 1;
-    e.log = `Wave ${e.wave - 1} snuffed out! +${fmt(ashPerFire(e.wave - 1) * 10)} Ash bonus.`;
+    e.log = `Wave ${e.wave - 1} snuffed out! +${fmt(bonus)} Ash and +${fmt(pearls)} Ember Pearls.`;
+    td.banner = { won: true, text: 'Wave cleared', sub: '+' + fmt(pearls) + ' Pearls · +' + fmt(bonus) + ' Ash', t: ARENA.bannerSecs };
     Sound.buy();
   } else {
     e.wave = Math.max(1, e.wave - 1);
     e.log = `The fire reached your reef. Back to wave ${e.wave}. More towers, or stronger ones, will hold it.`;
+    td.banner = { won: false, text: 'Reef burned', sub: 'Back to wave ' + e.wave, t: ARENA.bannerSecs };
     Sound.descend();
   }
   e.hp = emberMaxHp();
@@ -2184,10 +2938,15 @@ function waveOver(won) {
 function emberTick(dt) {
   const td = tdState();
   const e = S.ember;
+  td.t += dt;
+  td.blastCd = Math.max(0, (td.blastCd || 0) - dt);
   // Rolling Ash per second over the last 30s (shown in the HUD and used for offline earnings).
   const now = Date.now();
   td.ashLog = td.ashLog.filter(([t]) => now - t < 30000);
   e.ashRate = td.ashLog.reduce((s, [, a]) => s + a, 0) / 30;
+  td.shots = td.shots.filter((s) => (s.t -= dt) > 0);
+  td.puffs = td.puffs.filter((p) => (p.t -= dt) > 0);
+  if (td.banner && (td.banner.t -= dt) <= 0) td.banner = null;
   if (!td.running) {
     if (e.auto && !tideFull() && $('modal').hidden) {
       td.between -= dt;
@@ -2198,183 +2957,529 @@ function emberTick(dt) {
   const w = e.wave;
   // Spawn
   td.spawnIn -= dt;
-  if (td.toSpawn > 0 && td.spawnIn <= 0) {
-    const boss = td.boss && td.toSpawn === 1;
-    const hp = fireHp(w) * (boss ? 8 : 1);
-    td.fires.push({ d: 0, hp, max: hp, speed: (boss ? 0.6 : Math.min(2.2, 1 + 0.03 * w)), slow: 0, boss, flick: Math.random() * 6 });
-    td.toSpawn -= 1;
+  if (td.queue.length && td.spawnIn <= 0) {
+    td.fires.push(makeFire(td.queue.shift(), td.bonus ? td.bonus.wave : w));
     td.spawnIn = TD.spawnGap;
   }
-  // Move fires
+  if (td.crateIn > 0 && (td.crateIn -= dt) <= 0) {
+    const hp = fireHp(w) * CRATE.hp;
+    td.crate = { x: 0.8 + Math.random() * (TD.cols - 1.6), y: -0.6, hp, max: hp, t: 0, hurt: 0 };
+  }
+  // Move fires. Cinder bats hop ahead along the path every couple of seconds.
   td.fires.forEach((f) => {
     f.d += f.speed * (f.chill > 0 ? 0.4 : f.slow > 0 ? 0.6 : 1) * dt;
+    if (FIRE_KINDS[f.kind].hop) {
+      if (f.hop) { const k = Math.min(1, (f.hop.t += dt) / 0.45); f.d = f.hop.from + 1.6 * k; f.lift = Math.sin(Math.PI * k) * 0.7; if (k >= 1) { f.hop = null; f.lift = 0; } }
+      else if ((f.hopIn -= dt) <= 0) { f.hop = { from: f.d, t: 0 }; f.hopIn = 2.2; }
+    }
     f.slow = Math.max(0, f.slow - dt);
-    f.chill = Math.max(0, (f.chill || 0) - dt);
+    f.chill = Math.max(0, f.chill - dt);
+    f.hurt = Math.max(0, f.hurt - dt);
     f.flick += dt * 10;
     [f.x, f.y] = pathPoint(f.d);
   });
+  if (td.crate) {
+    const c = td.crate;
+    c.t += dt; c.y += CRATE.sink * dt; c.hurt = Math.max(0, c.hurt - dt);
+    c.x += Math.sin(c.t * 1.3) * 0.25 * dt;
+    if (c.y > TD.rows - 0.3) { td.pops.push({ x: c.x, y: c.y - 0.4, t: 1, text: 'Sank' }); td.crate = null; }
+  }
   const reached = td.fires.filter((f) => f.d >= TD_LEN);
   if (reached.length) {
-    reached.forEach((f) => { e.hp -= f.boss ? 5 : 1; });
+    reached.forEach((f) => {
+      e.hp -= FIRE_KINDS[f.kind].leak;
+      if (!FIRE_KINDS[f.kind].loot && S.pearls > 0) {
+        const lost = Math.min(S.pearls, TD.leakPearls);
+        S.pearls -= lost;
+        td.pops.push({ x: f.x, y: TD.rows - 0.6, t: 1.1, text: '-' + fmt(lost) + ' Pearls', color: '#FF6B6B' });
+      }
+      if (FIRE_KINDS[f.kind].loot) { if (td.bonus) td.bonus.missed++; td.pops.push({ x: f.x, y: TD.rows - 0.4, t: 1, text: 'Got away' }); }
+    });
     td.fires = td.fires.filter((f) => f.d < TD_LEN);
-    td.flash = 0.4;
+    if (reached.some((f) => !FIRE_KINDS[f.kind].loot)) td.flash = 0.4;
     if (e.hp <= 0) { waveOver(false); return; }
   }
-  // Towers fire
+  // Towers fire. Fires come first; a tower with no fire in reach turns on the crate.
   e.towers.forEach((t) => {
+    if (t.off > 0) { t.off = Math.max(0, t.off - dt); return; }
     t.cd = (t.cd || 0) - dt;
     if (t.cd > 0) return;
     const spec = TOWERS[t.type];
     if (t.type === 'clam') return;
-    const cx = t.c + 0.5, cy = t.r + 0.5;
+    const [cx, cy] = towerCenter(t);
     const range = towerRange(t);
     const inRange = td.fires.filter((f) => Math.hypot(f.x - cx, f.y - cy) <= range);
-    if (!inRange.length) return;
+    const crate = td.crate && Math.hypot(td.crate.x - cx, td.crate.y - cy) <= range ? td.crate : null;
+    if (!inRange.length && !crate) return;
     t.cd = towerRate(t);
     const dmg = towerDmg(t);
+    const hitCrate = (d) => { if (crate && td.crate) { crate.hp -= d; crate.hurt = 0.12; } };
     if (t.type === 'pump' || t.type === 'frost') {
-      inRange.forEach((f) => { f.hp -= dmg; if (t.type === 'pump') f.slow = 1; else f.chill = 2; });
+      inRange.forEach((f) => { hitFire(td, f, dmg); if (t.type === 'pump') f.slow = 1; else f.chill = 2; });
+      hitCrate(dmg);
       td.shots.push({ kind: 'ring', x: cx, y: cy, r: range, t: 0.3, color: spec.color });
-    } else if (t.type === 'whale') {
+      t.kick = 0.2;
+      return;
+    }
+    if (!inRange.length) {
+      t.aim = Math.atan2(crate.y - cy, crate.x - cx); t.kick = 0.15;
+      hitCrate(dmg);
+      td.shots.push({ kind: 'jet', x1: cx, y1: cy, x2: crate.x, y2: crate.y, color: spec.color, t: 0.15, w: t.type === 'whale' ? 6 : 3 });
+      return;
+    }
+    if (t.type === 'whale') {
       const target = inRange.reduce((a, b) => (b.hp > a.hp ? b : a));
-      target.hp -= dmg;
+      hitFire(td, target, dmg);
+      t.aim = Math.atan2(target.y - cy, target.x - cx);
       td.shots.push({ kind: 'jet', x1: cx, y1: cy, x2: target.x, y2: target.y, color: spec.color, t: 0.25, w: 6 });
     } else if (t.type === 'eel') {
       let from = { x: cx, y: cy };
       const hit = [];
       let target = inRange.reduce((a, b) => (b.d > a.d ? b : a));
+      t.aim = Math.atan2(target.y - cy, target.x - cx);
       for (let k = 0; k < 3 && target; k++) {
-        target.hp -= dmg * (k ? 0.7 : 1);
+        hitFire(td, target, dmg * (k ? 0.7 : 1));
         hit.push(target);
-        td.shots.push({ kind: 'jet', x1: from.x, y1: from.y, x2: target.x, y2: target.y, color: spec.color, t: 0.15 });
+        td.shots.push({ kind: 'zap', x1: from.x, y1: from.y, x2: target.x, y2: target.y, color: spec.color, t: 0.15 });
         from = target;
         const near = td.fires.filter((f) => !hit.includes(f) && Math.hypot(f.x - from.x, f.y - from.y) <= 1.5);
         target = near.length ? near.reduce((a, b) => (Math.hypot(b.x - from.x, b.y - from.y) < Math.hypot(a.x - from.x, a.y - from.y) ? b : a)) : null;
       }
     } else {
       const target = inRange.reduce((a, b) => (b.d > a.d ? b : a));
+      t.aim = Math.atan2(target.y - cy, target.x - cx);
       if (t.type === 'cannon') {
-        td.fires.forEach((f) => { if (Math.hypot(f.x - target.x, f.y - target.y) <= 1) f.hp -= dmg; });
+        td.fires.forEach((f) => { if (Math.hypot(f.x - target.x, f.y - target.y) <= 1) hitFire(td, f, dmg); });
+        if (td.crate && Math.hypot(td.crate.x - target.x, td.crate.y - target.y) <= 1) { td.crate.hp -= dmg; td.crate.hurt = 0.12; }
         td.shots.push({ kind: 'splash', x: target.x, y: target.y, t: 0.35 });
-      } else target.hp -= dmg;
-      td.shots.push({ kind: 'jet', x1: cx, y1: cy, x2: target.x, y2: target.y, color: spec.color, t: 0.15 });
+        td.shots.push({ kind: 'ball', x1: cx, y1: cy, x2: target.x, y2: target.y, color: spec.color, t: 0.2 });
+      } else {
+        hitFire(td, target, dmg);
+        td.shots.push({ kind: 'jet', x1: cx, y1: cy, x2: target.x, y2: target.y, color: spec.color, t: 0.15 });
+      }
     }
+    t.kick = 0.15;
   });
+  if (td.crate && td.crate.hp <= 0) salvageCrate(td);
   const dead = td.fires.filter((f) => f.hp <= 0);
-  dead.forEach(snuff);
   td.fires = td.fires.filter((f) => f.hp > 0);
-  td.shots.forEach((s) => { s.t -= dt; });
-  td.shots = td.shots.filter((s) => s.t > 0);
-  if (td.toSpawn === 0 && td.fires.length === 0) waveOver(true);
+  dead.forEach(snuff);
+  // The wave ends once every fire is out; a crate still sinking gets its chance first.
+  if (!td.queue.length && !td.fires.length) {
+    td.crateIn = 0;
+    if (!td.crate) waveOver(true);
+  }
 }
 
 // Drawing (only while the Ember screen is showing)
 function tdCanvas() {
   const cv = $('td');
   const wrap = cv.parentElement.getBoundingClientRect();
-  const tile = Math.max(28, Math.min(40, Math.floor(wrap.width / TD.cols)));
+  const tile = Math.max(28, Math.min(48, Math.floor(wrap.width / TD.cols)));
   const w = tile * TD.cols, h = tile * (TD.rows + 1);
   const dpr = window.devicePixelRatio || 1;
   if (cv.width !== w * dpr) { cv.width = w * dpr; cv.height = h * dpr; cv.style.width = w + 'px'; cv.style.height = h + 'px'; }
   return { cv, ctx: cv.getContext('2d'), tile, dpr };
 }
+// The scorched seabed never changes, so it's drawn once per tile size and reused.
+function tdGround(tile, dpr) {
+  if (ui.tdBg && ui.tdBg.tile === tile && ui.tdBg.dpr === dpr) return ui.tdBg.cv;
+  const cv = document.createElement('canvas');
+  cv.width = tile * TD.cols * dpr; cv.height = tile * TD.rows * dpr;
+  const g = cv.getContext('2d');
+  g.setTransform(dpr, 0, 0, dpr, 0, 0);
+  g.fillStyle = '#140705'; g.fillRect(0, 0, tile * TD.cols, tile * TD.rows);
+  // A fixed pseudo-random so the rocks don't jump around between redraws.
+  const rnd = (n) => { const x = Math.sin(n * 127.1) * 43758.5453; return x - Math.floor(x); };
+  for (let r = 0; r < TD.rows; r++) for (let c = 0; c < TD.cols; c++) {
+    if (TD_CELLS.has(c + ',' + r)) continue;
+    const s = c * 31 + r * 7;
+    g.fillStyle = (c + r) % 2 ? '#1F0D08' : '#1B0B07';
+    g.beginPath(); g.roundRect(c * tile + 1.5, r * tile + 1.5, tile - 3, tile - 3, tile * 0.18); g.fill();
+    for (let k = 0; k < 2; k++) {
+      g.fillStyle = k ? 'rgba(255,120,60,.05)' : 'rgba(0,0,0,.25)';
+      g.beginPath(); g.ellipse(c * tile + tile * (0.25 + 0.5 * rnd(s + k)), r * tile + tile * (0.3 + 0.45 * rnd(s + k + 9)), tile * (0.08 + 0.08 * rnd(s + k + 3)), tile * 0.06, rnd(s) * 3, 0, Math.PI * 2); g.fill();
+    }
+    if (rnd(s + 5) > 0.7) { g.strokeStyle = 'rgba(255,110,50,.16)'; g.lineWidth = 1; g.beginPath(); g.moveTo(c * tile + tile * 0.2, r * tile + tile * 0.7); g.lineTo(c * tile + tile * 0.45, r * tile + tile * 0.55); g.lineTo(c * tile + tile * 0.7, r * tile + tile * 0.8); g.stroke(); }
+  }
+  ui.tdBg = { tile, dpr, cv };
+  return cv;
+}
+// The path as one lava channel: dark crust, a glowing bed and a slow flow toward the reef.
+function tdLava(ctx, tile, t) {
+  const pts = TD_PATH.map(([c, r]) => [(c + 0.5) * tile, (Math.min(r, TD.rows) + 0.5) * tile]);
+  const line = () => { ctx.beginPath(); pts.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y))); };
+  ctx.save();
+  ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+  ctx.strokeStyle = '#2A0F08'; ctx.lineWidth = tile * 0.92; line(); ctx.stroke();
+  ctx.shadowColor = '#FF5A1F'; ctx.shadowBlur = tile * 0.5;
+  ctx.strokeStyle = '#7A2410'; ctx.lineWidth = tile * 0.62; line(); ctx.stroke();
+  ctx.shadowBlur = 0;
+  ctx.strokeStyle = '#B83418'; ctx.lineWidth = tile * 0.4; line(); ctx.stroke();
+  ctx.setLineDash([tile * 0.22, tile * 0.55]); ctx.lineDashOffset = -t * tile * 0.7;
+  ctx.strokeStyle = 'rgba(255,170,80,.75)'; ctx.lineWidth = tile * 0.16; line(); ctx.stroke();
+  ctx.setLineDash([tile * 0.08, tile * 0.9]); ctx.lineDashOffset = -t * tile * 1.1 + tile * 0.3;
+  ctx.strokeStyle = 'rgba(255,240,180,.8)'; ctx.lineWidth = tile * 0.08; line(); ctx.stroke();
+  ctx.restore();
+}
 function drawTD(dt) {
   const { ctx, tile, dpr } = tdCanvas();
   const td = tdState();
   const e = S.ember;
+  const W = tile * TD.cols, ry = TD.rows * tile, t = td.t;
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  ctx.fillStyle = '#1A0B07';
-  ctx.fillRect(0, 0, tile * TD.cols, tile * (TD.rows + 1));
-  for (let r = 0; r < TD.rows; r++) for (let c = 0; c < TD.cols; c++) {
-    const onPath = TD_CELLS.has(c + ',' + r);
-    ctx.fillStyle = onPath ? '#3A1A10' : ((c + r) % 2 ? '#22100A' : '#1E0E08');
-    ctx.fillRect(c * tile + 1, r * tile + 1, tile - 2, tile - 2);
-    if (onPath) { ctx.fillStyle = 'rgba(255,107,61,.12)'; ctx.fillRect(c * tile + tile * 0.3, r * tile + tile * 0.45, tile * 0.4, 2); }
+  ctx.drawImage(tdGround(tile, dpr), 0, 0, W, ry);
+  tdLava(ctx, tile, t);
+  // Smoke and embers rising off the lava.
+  if (Math.random() < dt * 6) { const [x, y] = pathPoint(Math.random() * TD_LEN); td.smoke.push({ x, y, t: 1.6, ember: Math.random() < 0.35, dx: (Math.random() - 0.5) * 0.3 }); }
+  td.smoke = td.smoke.filter((p) => (p.t -= dt) > 0);
+  td.smoke.forEach((p) => {
+    const k = 1 - p.t / 1.6, x = (p.x + p.dx * k) * tile, y = (p.y - k * 0.9) * tile;
+    if (p.ember) { ctx.fillStyle = `rgba(255,170,80,${0.8 * (1 - k)})`; ctx.fillRect(x, y, 2, 2); }
+    else { ctx.fillStyle = `rgba(120,90,80,${0.18 * (1 - k)})`; ctx.beginPath(); ctx.arc(x, y, tile * (0.12 + 0.2 * k), 0, Math.PI * 2); ctx.fill(); }
+  });
+  // Your reef at the bottom, with its health along the top edge.
+  const reefG = ctx.createLinearGradient(0, ry, 0, ry + tile);
+  reefG.addColorStop(0, '#0E3A31'); reefG.addColorStop(1, '#06201B');
+  ctx.fillStyle = reefG; ctx.fillRect(0, ry, W, tile);
+  [[0.7, '#2ED3B7'], [1.9, '#FF8FD0'], [3.5, '#8F7BFF'], [5.1, '#2ED3B7'], [6.3, '#FF8FD0']].forEach(([x, col], i) => {
+    const sway = Math.sin(t * 1.4 + i) * tile * 0.03;
+    ctx.fillStyle = hexA(col, 0.25); ctx.beginPath(); ctx.arc(x * tile, ry + tile * 0.75, tile * 0.5, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = col; ctx.beginPath(); ctx.ellipse(x * tile + sway, ry + tile * 0.85, tile * 0.24, tile * 0.5, 0, Math.PI, 0); ctx.fill();
+  });
+  const hpFrac = Math.max(0, e.hp / emberMaxHp());
+  ctx.fillStyle = 'rgba(0,0,0,.45)'; ctx.fillRect(0, ry, W, 4);
+  ctx.fillStyle = hpFrac > 0.5 ? '#5CF2D6' : hpFrac > 0.25 ? '#FFC46B' : '#FF6B6B'; ctx.fillRect(0, ry, W * hpFrac, 4);
+  if (td.flash > 0) { ctx.fillStyle = `rgba(255,80,40,${td.flash})`; ctx.fillRect(0, ry, W, tile); td.flash -= dt; }
+  // Range rings: the selected tower's reach, or each build option's reach on an empty tile.
+  if (td.sel) {
+    let sx = (td.sel.c + 0.5) * tile, sy = (td.sel.r + 0.5) * tile;
+    const sel = towerAt(td.sel.c, td.sel.r);
+    if (sel) { const [qx, qy] = towerCenter(sel); sx = qx * tile; sy = qy * tile; }
+    const rings = sel ? [[towerRange(sel), TOWERS[sel.type].color, true]] : loadout().map((k) => [TOWERS[k].range * (1 + 0.1 * eUp('reach')), TOWERS[k].color, false]);
+    rings.forEach(([rad, col, solid]) => {
+      ctx.fillStyle = hexA(col, solid ? 0.1 : 0.04); ctx.beginPath(); ctx.arc(sx, sy, rad * tile, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = hexA(col, 0.7); ctx.lineWidth = 1.5; ctx.setLineDash(solid ? [] : [5, 5]);
+      ctx.beginPath(); ctx.arc(sx, sy, rad * tile, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]);
+    });
+    ctx.strokeStyle = '#FFC46B'; ctx.lineWidth = 2; ctx.beginPath(); ctx.roundRect(td.sel.c * tile + 2, td.sel.r * tile + 2, tile - 4, tile - 4, tile * 0.18); ctx.stroke();
   }
-  // Your reef at the bottom
-  const ry = TD.rows * tile;
-  ctx.fillStyle = '#0C2E27';
-  ctx.fillRect(0, ry, tile * TD.cols, tile);
-  [[1.2, '#2ED3B7'], [2.5, '#FF8FD0'], [3.8, '#8F7BFF'], [5.2, '#2ED3B7']].forEach(([x, col]) => {
-    ctx.fillStyle = col;
-    ctx.beginPath(); ctx.ellipse(x * tile, ry + tile * 0.8, tile * 0.32, tile * 0.55, 0, Math.PI, 0); ctx.fill();
-  });
-  if (td.flash > 0) { ctx.fillStyle = `rgba(255,80,40,${td.flash})`; ctx.fillRect(0, ry, tile * TD.cols, tile); td.flash -= dt; }
-  // Selected tile
-  if (td.sel) { ctx.strokeStyle = '#FFC46B'; ctx.lineWidth = 2; ctx.strokeRect(td.sel.c * tile + 2, td.sel.r * tile + 2, tile - 4, tile - 4); }
-  // Towers
-  e.towers.forEach((t) => {
-    const spec = TOWERS[t.type];
-    const x = (t.c + 0.5) * tile, y = (t.r + 0.5) * tile;
-    ctx.fillStyle = '#0B1026';
-    ctx.beginPath(); ctx.arc(x, y, tile * 0.38, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = spec.color;
-    if (t.type === 'spout') { ctx.beginPath(); ctx.moveTo(x, y - tile * 0.26); ctx.quadraticCurveTo(x + tile * 0.22, y + tile * 0.05, x, y + tile * 0.2); ctx.quadraticCurveTo(x - tile * 0.22, y + tile * 0.05, x, y - tile * 0.26); ctx.fill(); }
-    else if (t.type === 'pump' || t.type === 'frost') { ctx.lineWidth = 4; ctx.strokeStyle = spec.color; ctx.beginPath(); ctx.arc(x, y, tile * 0.2, 0, Math.PI * 2); ctx.stroke(); if (t.type === 'frost') { ctx.beginPath(); ctx.moveTo(x - tile * 0.2, y); ctx.lineTo(x + tile * 0.2, y); ctx.moveTo(x, y - tile * 0.2); ctx.lineTo(x, y + tile * 0.2); ctx.stroke(); } }
-    else if (t.type === 'whale') { ctx.beginPath(); ctx.ellipse(x, y, tile * 0.26, tile * 0.15, 0, 0, Math.PI * 2); ctx.fill(); ctx.fillRect(x - tile * 0.04, y - tile * 0.3, tile * 0.08, tile * 0.16); }
-    else if (t.type === 'eel') { ctx.lineWidth = 4; ctx.strokeStyle = spec.color; ctx.beginPath(); ctx.moveTo(x - tile * 0.2, y + tile * 0.15); ctx.lineTo(x - tile * 0.05, y - tile * 0.15); ctx.lineTo(x + tile * 0.05, y + tile * 0.1); ctx.lineTo(x + tile * 0.2, y - tile * 0.2); ctx.stroke(); }
-    else if (t.type === 'clam') { ctx.beginPath(); ctx.arc(x, y + tile * 0.05, tile * 0.22, Math.PI, 0); ctx.fill(); ctx.fillRect(x - tile * 0.22, y + tile * 0.05, tile * 0.44, tile * 0.08); }
-    else ctx.fillRect(x - tile * 0.18, y - tile * 0.18, tile * 0.36, tile * 0.36);
-    for (let i = 0; i < t.lvl; i++) { ctx.fillStyle = '#FFC46B'; ctx.fillRect(x - tile * 0.3 + i * tile * 0.13, y + tile * 0.3, tile * 0.09, tile * 0.06); }
-  });
-  // Fires
-  td.fires.forEach((f) => {
-    const x = f.x * tile, y = f.y * tile;
-    const size = tile * (f.boss ? 0.5 : 0.3) * (0.9 + 0.1 * Math.sin(f.flick));
-    const g = ctx.createRadialGradient(x, y + size * 0.2, 1, x, y, size);
-    g.addColorStop(0, '#FFF3B0'); g.addColorStop(0.45, f.boss ? '#FF4A2A' : '#FF9A5C'); g.addColorStop(1, 'rgba(255,74,42,0)');
-    ctx.fillStyle = g;
-    ctx.beginPath(); ctx.arc(x, y, size, 0, Math.PI * 2); ctx.fill();
-    if (f.slow > 0 || f.chill > 0) { ctx.strokeStyle = f.chill > 0 ? 'rgba(200,255,255,.9)' : 'rgba(92,242,214,.7)'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(x, y, size * 0.8, 0, Math.PI * 2); ctx.stroke(); }
-    ctx.fillStyle = '#3A1A10'; ctx.fillRect(x - tile * 0.25, y - size - 6, tile * 0.5, 3);
-    ctx.fillStyle = '#6FE3A5'; ctx.fillRect(x - tile * 0.25, y - size - 6, tile * 0.5 * Math.max(0, f.hp / f.max), 3);
-  });
-  // Water
+  e.towers.forEach((tw) => drawTower(ctx, tw, tile, t, dt));
+  if (td.crate) drawCrate(ctx, td.crate, tile, t);
+  td.fires.forEach((f) => drawFire(ctx, f, tile));
+  // Water.
   td.shots.forEach((s) => {
-    if (s.kind === 'jet') { ctx.strokeStyle = s.color; ctx.lineWidth = s.w || 3; ctx.beginPath(); ctx.moveTo(s.x1 * tile, s.y1 * tile); ctx.lineTo(s.x2 * tile, s.y2 * tile); ctx.stroke(); }
-    else if (s.kind === 'ring') { ctx.globalAlpha = Math.min(1, s.t * 2); ctx.strokeStyle = s.color || '#5CF2D6'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(s.x * tile, s.y * tile, s.r * tile * (1 - s.t), 0, Math.PI * 2); ctx.stroke(); ctx.globalAlpha = 1; }
-    else { ctx.fillStyle = `rgba(157,184,255,${s.t * 1.6})`; ctx.beginPath(); ctx.arc(s.x * tile, s.y * tile, tile * (1.2 - s.t * 2), 0, Math.PI * 2); ctx.fill(); }
+    if (s.kind === 'jet') {
+      ctx.lineCap = 'round';
+      ctx.strokeStyle = hexA(s.color, 0.55); ctx.lineWidth = (s.w || 3) + 3; ctx.beginPath(); ctx.moveTo(s.x1 * tile, s.y1 * tile); ctx.lineTo(s.x2 * tile, s.y2 * tile); ctx.stroke();
+      ctx.strokeStyle = '#EFFFFB'; ctx.lineWidth = Math.max(1, (s.w || 3) - 1); ctx.beginPath(); ctx.moveTo(s.x1 * tile, s.y1 * tile); ctx.lineTo(s.x2 * tile, s.y2 * tile); ctx.stroke();
+      ctx.fillStyle = hexA('#BFEFFF', 0.8);
+      for (let i = 0; i < 3; i++) { const a = i * 2.1 + s.t * 30; ctx.beginPath(); ctx.arc(s.x2 * tile + Math.cos(a) * 5, s.y2 * tile + Math.sin(a) * 5, 1.6, 0, Math.PI * 2); ctx.fill(); }
+    } else if (s.kind === 'zap') {
+      ctx.strokeStyle = s.color; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.moveTo(s.x1 * tile, s.y1 * tile);
+      for (let i = 1; i < 4; i++) { const k = i / 4; ctx.lineTo((s.x1 + (s.x2 - s.x1) * k) * tile + (Math.random() - 0.5) * 8, (s.y1 + (s.y2 - s.y1) * k) * tile + (Math.random() - 0.5) * 8); }
+      ctx.lineTo(s.x2 * tile, s.y2 * tile); ctx.stroke();
+    } else if (s.kind === 'ball') {
+      const k = 1 - s.t / 0.2, x = s.x1 + (s.x2 - s.x1) * k, y = s.y1 + (s.y2 - s.y1) * k - Math.sin(Math.PI * k) * 0.8;
+      ctx.fillStyle = s.color; ctx.beginPath(); ctx.arc(x * tile, y * tile, tile * 0.14, 0, Math.PI * 2); ctx.fill();
+    } else if (s.kind === 'blast') {
+      const k = 1 - s.t / 0.5;
+      ctx.fillStyle = `rgba(150,150,160,${0.35 * (1 - k)})`; ctx.beginPath(); ctx.arc(s.x * tile, s.y * tile, s.r * tile * k, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = `rgba(225,225,235,${1 - k})`; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(s.x * tile, s.y * tile, s.r * tile * k, 0, Math.PI * 2); ctx.stroke();
+    } else if (s.kind === 'sparkle') {
+      const k = 1 - s.t / 0.5;
+      ctx.fillStyle = hexA(s.color, 1 - k);
+      for (let i = 0; i < 8; i++) { const a = i * Math.PI / 4, r = (0.2 + k * 0.9) * tile; ctx.save(); ctx.translate(s.x * tile + Math.cos(a) * r, s.y * tile + Math.sin(a) * r); ctx.rotate(a); ctx.fillRect(-1.5, -4, 3, 8); ctx.restore(); }
+    } else if (s.kind === 'ring') {
+      ctx.globalAlpha = Math.min(1, s.t * 2); ctx.strokeStyle = s.color || '#5CF2D6'; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.arc(s.x * tile, s.y * tile, s.r * tile * (1 - s.t), 0, Math.PI * 2); ctx.stroke(); ctx.globalAlpha = 1;
+    } else {
+      const k = 1 - s.t / 0.35;
+      ctx.fillStyle = `rgba(157,200,255,${0.5 * (1 - k)})`; ctx.beginPath(); ctx.arc(s.x * tile, s.y * tile, tile * (0.4 + 0.8 * k), 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = `rgba(230,250,255,${1 - k})`;
+      for (let i = 0; i < 6; i++) { const a = i * 1.05; ctx.beginPath(); ctx.arc((s.x + Math.cos(a) * k) * tile, (s.y + Math.sin(a) * k - k * 0.3) * tile, 2, 0, Math.PI * 2); ctx.fill(); }
+    }
   });
-  // Ash pops
-  td.pops = (td.pops || []).filter((p) => (p.t -= dt) > 0);
-  ctx.font = `700 ${Math.round(tile * 0.28)}px DM Sans, sans-serif`;
+  // Steam where fires went out.
+  td.puffs.forEach((p) => {
+    const k = 1 - p.t / 0.6;
+    ctx.fillStyle = `rgba(225,235,240,${0.45 * (1 - k)})`;
+    for (let i = 0; i < 3; i++) { ctx.beginPath(); ctx.arc((p.x + (i - 1) * p.r * 0.4) * tile, (p.y - k * 0.6 - i * 0.05) * tile, p.r * tile * (0.35 + 0.4 * k), 0, Math.PI * 2); ctx.fill(); }
+  });
+  // Ash and damage numbers.
+  td.pops = td.pops.filter((p) => (p.t -= dt) > 0);
   ctx.textAlign = 'center';
-  td.pops.forEach((p) => { ctx.fillStyle = `rgba(255,196,107,${p.t})`; ctx.fillText(p.text, p.x * tile, (p.y - (0.8 - p.t)) * tile); });
+  td.pops.forEach((p) => {
+    ctx.font = `${p.small ? 700 : 800} ${Math.round(tile * (p.small ? 0.24 : 0.3))}px DM Sans, sans-serif`;
+    ctx.fillStyle = p.color ? hexA(p.color, p.t * 1.5) : `rgba(245,235,225,${Math.min(1, p.t * 1.5)})`;
+    ctx.fillText(p.text, p.x * tile, (p.y - (0.8 - p.t) * 0.8) * tile);
+  });
+  if (td.banner) drawBanner(ctx, td.banner, W, ry, tile * 0.75);
 }
+function drawTower(ctx, tw, tile, t, dt) {
+  const spec = TOWERS[tw.type];
+  const [ux, uy] = towerCenter(tw);
+  const x = ux * tile, y = uy * tile, R = tile * (tw.evo ? 0.55 : 0.4);
+  tw.kick = Math.max(0, (tw.kick || 0) - dt);
+  const aim = tw.aim == null ? -Math.PI / 2 : tw.aim, back = tw.kick * tile * 0.4;
+  if (tw.evo) {
+    // A glowing two-tile plinth with a gold rim, and motes circling it.
+    const c0 = Math.min(tw.c, tw.c2), r0 = Math.min(tw.r, tw.r2), cw = Math.abs(tw.c - tw.c2) + 1, rh = Math.abs(tw.r - tw.r2) + 1;
+    ctx.save();
+    ctx.shadowColor = spec.color; ctx.shadowBlur = tile * 0.4;
+    ctx.fillStyle = '#3D2219'; ctx.beginPath(); ctx.roundRect(c0 * tile + 3, r0 * tile + 3, cw * tile - 6, rh * tile - 6, tile * 0.4); ctx.fill();
+    ctx.restore();
+    ctx.strokeStyle = '#FFC46B'; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.roundRect(c0 * tile + 3, r0 * tile + 3, cw * tile - 6, rh * tile - 6, tile * 0.4); ctx.stroke();
+    for (let i = 0; i < 3; i++) {
+      const a = t * 1.5 + i * 2.09;
+      ctx.fillStyle = hexA('#FFE08A', 0.8); ctx.beginPath(); ctx.arc(x + Math.cos(a) * tile * (cw > 1 ? 0.9 : 0.5), y + Math.sin(a) * tile * (rh > 1 ? 0.9 : 0.5), 2.2, 0, Math.PI * 2); ctx.fill();
+    }
+  } else {
+    // Rock base with a ring in the tower's colour.
+    ctx.fillStyle = '#2E1A14'; ctx.beginPath(); ctx.arc(x, y + 2, R, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#3D2219'; ctx.beginPath(); ctx.arc(x, y, R, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = hexA(spec.color, 0.8); ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(x, y, R - 1, 0, Math.PI * 2); ctx.stroke();
+    // A gold star marks towers boosted by an evolved neighbour.
+    if (nearEvolved(tw)) {
+      ctx.fillStyle = '#FFC46B'; ctx.beginPath();
+      for (let i = 0; i < 10; i++) { const a = -Math.PI / 2 + i * Math.PI / 5, rr = i % 2 ? 2.2 : 5; ctx.lineTo(x + R * 0.75 + Math.cos(a) * rr, y - R * 0.75 + Math.sin(a) * rr); }
+      ctx.fill();
+    }
+  }
+  ctx.save(); ctx.translate(x, y);
+  ctx.fillStyle = spec.color; ctx.strokeStyle = spec.color; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  switch (tw.type) {
+    case 'spout': // a nozzle that turns to follow its target
+      ctx.rotate(aim); ctx.translate(-back, 0);
+      ctx.beginPath(); ctx.roundRect(-R * 0.15, -R * 0.2, R * 0.95, R * 0.4, R * 0.15); ctx.fill();
+      ctx.fillStyle = '#EFFFFB'; ctx.beginPath(); ctx.arc(R * 0.8, 0, R * 0.12, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = spec.color; ctx.beginPath(); ctx.arc(0, 0, R * 0.42, 0, Math.PI * 2); ctx.fill();
+      break;
+    case 'pump': { // a coral head that pulses as it pumps
+      const p = 1 + Math.sin(t * 4 + tw.c) * 0.06 + tw.kick;
+      ctx.scale(p, p);
+      for (let i = 0; i < 5; i++) { ctx.rotate(Math.PI * 2 / 5); ctx.beginPath(); ctx.ellipse(0, -R * 0.42, R * 0.17, R * 0.32, 0, 0, Math.PI * 2); ctx.fill(); }
+      ctx.fillStyle = '#EFFFFB'; ctx.beginPath(); ctx.arc(0, 0, R * 0.2, 0, Math.PI * 2); ctx.fill();
+      break;
+    }
+    case 'cannon': // a fat barrel that kicks back
+      ctx.rotate(aim); ctx.translate(-back, 0);
+      ctx.beginPath(); ctx.roundRect(-R * 0.1, -R * 0.3, R * 0.95, R * 0.6, R * 0.2); ctx.fill();
+      ctx.fillStyle = '#2B1640'; ctx.beginPath(); ctx.arc(R * 0.82, 0, R * 0.18, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = spec.color; ctx.beginPath(); ctx.arc(0, 0, R * 0.55, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = 'rgba(255,255,255,.25)'; ctx.beginPath(); ctx.arc(-R * 0.15, -R * 0.15, R * 0.2, 0, Math.PI * 2); ctx.fill();
+      break;
+    case 'whale': { // a little whale that blows a plume when it fires
+      const f = Math.cos(aim) < 0 ? -1 : 1;
+      ctx.scale(f, 1);
+      ctx.beginPath(); ctx.ellipse(0, R * 0.1, R * 0.62, R * 0.4, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.moveTo(-R * 0.55, R * 0.1); ctx.lineTo(-R * 0.9, -R * 0.15); ctx.lineTo(-R * 0.85, R * 0.4); ctx.fill();
+      ctx.fillStyle = '#0B1026'; ctx.beginPath(); ctx.arc(R * 0.3, 0, R * 0.08, 0, Math.PI * 2); ctx.fill();
+      if (tw.kick > 0) { ctx.fillStyle = 'rgba(220,240,255,.85)'; ctx.beginPath(); ctx.arc(R * 0.1, -R * 0.55, R * 0.25 * (1 + tw.kick * 3), 0, Math.PI * 2); ctx.fill(); }
+      break;
+    }
+    case 'eel': // a coiled eel, crackling
+      ctx.lineWidth = R * 0.22;
+      ctx.beginPath(); for (let i = 0; i <= 20; i++) { const a = i * 0.55, r = R * (0.12 + i * 0.028); i ? ctx.lineTo(Math.cos(a) * r, Math.sin(a) * r) : ctx.moveTo(Math.cos(a) * r, Math.sin(a) * r); } ctx.stroke();
+      ctx.fillStyle = '#0B1026'; ctx.beginPath(); ctx.arc(Math.cos(11) * R * 0.68, Math.sin(11) * R * 0.68, R * 0.07, 0, Math.PI * 2); ctx.fill();
+      if (Math.sin(t * 9 + tw.r) > 0.6) { ctx.strokeStyle = '#FFFFFF'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(-R * 0.2, -R * 0.75); ctx.lineTo(0, -R * 0.55); ctx.lineTo(R * 0.15, -R * 0.8); ctx.stroke(); }
+      break;
+    case 'frost': // a vent breathing cold mist
+      ctx.beginPath(); for (let i = 0; i < 6; i++) { const a = i * Math.PI / 3; ctx.lineTo(Math.cos(a) * R * 0.55, Math.sin(a) * R * 0.55); } ctx.closePath(); ctx.fill();
+      ctx.strokeStyle = '#0B2A3A'; ctx.lineWidth = 2;
+      for (let i = 0; i < 3; i++) { const a = i * Math.PI / 3; ctx.beginPath(); ctx.moveTo(Math.cos(a) * R * 0.35, Math.sin(a) * R * 0.35); ctx.lineTo(-Math.cos(a) * R * 0.35, -Math.sin(a) * R * 0.35); ctx.stroke(); }
+      ctx.fillStyle = `rgba(200,255,255,${0.25 + 0.15 * Math.sin(t * 2 + tw.c)})`; ctx.beginPath(); ctx.arc(0, -R * 0.2, R * 0.75, 0, Math.PI * 2); ctx.fill();
+      break;
+    case 'clam': { // an open clam with a glowing pearl
+      const open = 0.25 + 0.1 * Math.sin(t * 1.5 + tw.c);
+      ctx.beginPath(); ctx.ellipse(0, R * 0.15, R * 0.65, R * 0.35, 0, 0, Math.PI); ctx.fill();
+      ctx.save(); ctx.rotate(-open); ctx.beginPath(); ctx.ellipse(0, R * 0.1, R * 0.65, R * 0.35, 0, Math.PI, Math.PI * 2); ctx.fill(); ctx.restore();
+      ctx.fillStyle = '#FFF3F8'; ctx.shadowColor = '#FFFFFF'; ctx.shadowBlur = 8; ctx.beginPath(); ctx.arc(0, R * 0.05, R * 0.18, 0, Math.PI * 2); ctx.fill(); ctx.shadowBlur = 0;
+      break;
+    }
+    default:
+      ctx.fillRect(-R * 0.4, -R * 0.4, R * 0.8, R * 0.8);
+  }
+  ctx.restore();
+  if (tw.off > 0) {
+    ctx.fillStyle = 'rgba(40,40,46,.72)'; ctx.beginPath(); ctx.arc(x, y, R + 1, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = 'rgba(220,220,230,.85)'; ctx.lineWidth = 2.5;
+    ctx.beginPath(); ctx.arc(x, y, R + 2, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * (tw.off / TD.blastSecs)); ctx.stroke();
+    ctx.fillStyle = '#E6E6EE'; ctx.font = `800 ${Math.round(tile * 0.3)}px DM Sans, sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(Math.ceil(tw.off), x, y); ctx.textBaseline = 'alphabetic';
+  }
+  // Level pips along the bottom of the base.
+  for (let i = 0; i < tw.lvl; i++) {
+    const a = Math.PI / 2 + (i - (tw.lvl - 1) / 2) * 0.42;
+    ctx.fillStyle = '#FFC46B'; ctx.beginPath(); ctx.arc(x + Math.cos(a) * R, y + Math.sin(a) * R, tile * 0.055, 0, Math.PI * 2); ctx.fill();
+  }
+}
+// Fire creatures: a flickering flame with little eyes, shaped by kind.
+function drawFire(ctx, f, tile) {
+  const k = FIRE_KINDS[f.kind];
+  const x = f.x * tile, y = (f.y - (f.lift || 0)) * tile, s = tile * k.size * (0.93 + 0.07 * Math.sin(f.flick));
+  const hot = f.hurt > 0;
+  ctx.save();
+  if (f.lift) { ctx.fillStyle = 'rgba(0,0,0,.3)'; ctx.beginPath(); ctx.ellipse(x, f.y * tile + s * 0.5, s * 0.6, s * 0.2, 0, 0, Math.PI * 2); ctx.fill(); }
+  const glow = ctx.createRadialGradient(x, y, 0, x, y, s * 2);
+  const gc = f.kind === 'pearl' ? '255,143,208' : f.kind === 'chest' ? '255,224,138' : f.kind === 'magma' ? '255,90,30' : '255,150,60';
+  glow.addColorStop(0, `rgba(${gc},.4)`); glow.addColorStop(1, `rgba(${gc},0)`);
+  ctx.fillStyle = glow; ctx.beginPath(); ctx.arc(x, y, s * 2, 0, Math.PI * 2); ctx.fill();
+  const flame = (cx, cy, r, c0, c1, c2) => {
+    const g = ctx.createRadialGradient(cx, cy + r * 0.35, 1, cx, cy, r * 1.3);
+    g.addColorStop(0, hot ? '#FFFFFF' : c0); g.addColorStop(0.45, c1); g.addColorStop(1, c2);
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.moveTo(cx, cy - r * 1.35 - Math.sin(f.flick * 1.3) * r * 0.15);
+    ctx.bezierCurveTo(cx + r * 0.6, cy - r * 0.6, cx + r * 1.05, cy + r * 0.1, cx + r * 0.8, cy + r * 0.6);
+    ctx.quadraticCurveTo(cx, cy + r * 1.25, cx - r * 0.8, cy + r * 0.6);
+    ctx.bezierCurveTo(cx - r * 1.05, cy + r * 0.1, cx - r * 0.6, cy - r * 0.6, cx, cy - r * 1.35 + Math.sin(f.flick) * r * 0.1);
+    ctx.fill();
+  };
+  const eyes = (cx, cy, r, c = '#3A0D04') => { ctx.fillStyle = c; [-1, 1].forEach((d) => { ctx.beginPath(); ctx.ellipse(cx + d * r * 0.32, cy, r * 0.11, r * 0.16, 0, 0, Math.PI * 2); ctx.fill(); }); };
+  switch (f.kind) {
+    case 'pearl': { // a glowing pearl in an open shell
+      ctx.fillStyle = hot ? '#FFFFFF' : '#C77DB0';
+      ctx.beginPath(); ctx.ellipse(x, y + s * 0.45, s * 1.1, s * 0.45, 0, 0, Math.PI); ctx.fill();
+      ctx.beginPath(); ctx.ellipse(x, y - s * 0.1, s * 1.05, s * 0.5, -0.25, Math.PI, Math.PI * 2); ctx.fill();
+      const pg = ctx.createRadialGradient(x - s * 0.2, y - s * 0.1, 1, x, y + s * 0.1, s * 0.65);
+      pg.addColorStop(0, '#FFFFFF'); pg.addColorStop(0.6, '#FFE3F3'); pg.addColorStop(1, '#FF8FD0');
+      ctx.fillStyle = pg; ctx.beginPath(); ctx.arc(x, y + s * 0.15, s * 0.6, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = `rgba(255,255,255,${0.5 + 0.5 * Math.sin(f.flick * 0.6)})`; ctx.beginPath(); ctx.arc(x - s * 0.22, y - s * 0.05, s * 0.14, 0, Math.PI * 2); ctx.fill();
+      break;
+    }
+    case 'chest': { // a treasure chest with gold trim, bobbing along
+      const bob = Math.sin(f.flick * 0.5) * s * 0.1;
+      ctx.fillStyle = hot ? '#FFFFFF' : '#7A4A22'; ctx.fillRect(x - s, y - s * 0.35 + bob, s * 2, s * 1.05);
+      ctx.fillStyle = hot ? '#FFFFFF' : '#9A6230'; ctx.beginPath(); ctx.ellipse(x, y - s * 0.35 + bob, s, s * 0.5, 0, Math.PI, 0); ctx.fill();
+      ctx.fillStyle = '#FFC46B';
+      ctx.fillRect(x - s, y - s * 0.4 + bob, s * 2, s * 0.14);
+      ctx.fillRect(x - s * 0.72, y - s * 0.8 + bob, s * 0.14, s * 1.5); ctx.fillRect(x + s * 0.58, y - s * 0.8 + bob, s * 0.14, s * 1.5);
+      ctx.fillStyle = '#FFF3B0'; ctx.fillRect(x - s * 0.16, y - s * 0.3 + bob, s * 0.32, s * 0.38);
+      break;
+    }
+    case 'spark': { // a spinning four-point spark
+      ctx.translate(x, y); ctx.rotate(f.flick * 0.5);
+      ctx.fillStyle = hot ? '#FFFFFF' : '#FFE16B';
+      ctx.beginPath(); for (let i = 0; i < 8; i++) { const a = i * Math.PI / 4, r = i % 2 ? s * 0.35 : s * 1.2; ctx.lineTo(Math.cos(a) * r, Math.sin(a) * r); } ctx.closePath(); ctx.fill();
+      ctx.fillStyle = '#FFFBE0'; ctx.beginPath(); ctx.arc(0, 0, s * 0.3, 0, Math.PI * 2); ctx.fill();
+      break;
+    }
+    case 'magma': // a slow crusted blob with glowing cracks
+      ctx.fillStyle = hot ? '#FFD0B0' : '#4A1A0E'; ctx.beginPath(); ctx.ellipse(x, y + s * 0.1, s * 1.05, s * 0.9, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = `rgba(255,${120 + 60 * Math.sin(f.flick * 0.5)},40,.95)`; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(x - s * 0.6, y - s * 0.2); ctx.lineTo(x - s * 0.1, y + s * 0.1); ctx.lineTo(x + s * 0.2, y - s * 0.4); ctx.moveTo(x - s * 0.1, y + s * 0.1); ctx.lineTo(x + s * 0.1, y + s * 0.6); ctx.moveTo(x + s * 0.3, y + s * 0.1); ctx.lineTo(x + s * 0.75, y + s * 0.25); ctx.stroke();
+      eyes(x, y - s * 0.1, s * 1.5, '#FFB060');
+      break;
+    case 'cinder': { // an ember with flapping wings
+      const flap = Math.sin(f.flick * 1.6) * s * 0.5;
+      ctx.fillStyle = hot ? '#FFFFFF' : '#3A1208';
+      [-1, 1].forEach((d) => { ctx.beginPath(); ctx.moveTo(x + d * s * 0.3, y); ctx.lineTo(x + d * s * 1.5, y - s * 0.4 - flap); ctx.lineTo(x + d * s * 1.1, y + s * 0.3); ctx.closePath(); ctx.fill(); });
+      ctx.strokeStyle = '#FF7A3A'; ctx.lineWidth = 1.2;
+      [-1, 1].forEach((d) => { ctx.beginPath(); ctx.moveTo(x + d * s * 0.3, y); ctx.lineTo(x + d * s * 1.5, y - s * 0.4 - flap); ctx.stroke(); });
+      flame(x, y, s * 0.75, '#FFF3B0', '#FF7A3A', 'rgba(255,74,42,0)');
+      eyes(x, y + s * 0.1, s);
+      break;
+    }
+    case 'inferno': // a big three-tongued blaze
+      flame(x - s * 0.45, y + s * 0.15, s * 0.6, '#FFF3B0', '#FF4A2A', 'rgba(200,30,10,0)');
+      flame(x + s * 0.45, y + s * 0.15, s * 0.6, '#FFF3B0', '#FF4A2A', 'rgba(200,30,10,0)');
+      flame(x, y, s * 0.85, '#FFFBE0', '#FF6A2A', 'rgba(220,40,10,0)');
+      ctx.fillStyle = '#3A0D04';
+      [-1, 1].forEach((d) => { ctx.beginPath(); ctx.moveTo(x + d * s * 0.12, y + s * 0.02); ctx.lineTo(x + d * s * 0.45, y - s * 0.12); ctx.lineTo(x + d * s * 0.42, y + s * 0.12); ctx.closePath(); ctx.fill(); });
+      break;
+    default:
+      flame(x, y, s, '#FFF3B0', '#FF9A5C', 'rgba(255,74,42,0)');
+      eyes(x, y + s * 0.15, s);
+  }
+  ctx.restore();
+  const blast = FIRE_KINDS[f.kind].blast;
+  if (blast) {
+    const ready = !(tdState().blastCd > 0);
+    ctx.save();
+    ctx.setLineDash([4, 5]); ctx.lineDashOffset = -f.flick * 2;
+    ctx.strokeStyle = ready ? 'rgba(210,210,220,.55)' : 'rgba(210,210,220,.18)'; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.arc(x, f.y * tile, blast * tile, 0, Math.PI * 2); ctx.stroke();
+    ctx.restore();
+  }
+  if (f.slow > 0 || f.chill > 0) { ctx.strokeStyle = f.chill > 0 ? 'rgba(200,255,255,.9)' : 'rgba(92,242,214,.7)'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(x, y, s * 1.15, 0, Math.PI * 2); ctx.stroke(); }
+  hpBar(ctx, x, y - s * 1.5 - 5, Math.max(tile * 0.5, s * 2), f.hp / f.max, f.boss ? '#E58BFF' : '#6FE3A5');
+}
+// A burning supply crate sinking from the surface.
+function drawCrate(ctx, c, tile, t) {
+  const x = c.x * tile, y = c.y * tile, s = tile * 0.36;
+  const halo = ctx.createRadialGradient(x, y, s * 0.4, x, y, s * 2.4);
+  halo.addColorStop(0, 'rgba(255,224,138,.35)'); halo.addColorStop(1, 'rgba(255,224,138,0)');
+  ctx.fillStyle = halo; ctx.beginPath(); ctx.arc(x, y, s * 2.4, 0, Math.PI * 2); ctx.fill();
+  ctx.save(); ctx.translate(x, y); ctx.rotate(Math.sin(c.t * 1.3) * 0.15);
+  ctx.fillStyle = c.hurt > 0 ? '#FFFFFF' : '#8A5A2B'; ctx.fillRect(-s, -s * 0.8, s * 2, s * 1.6);
+  ctx.strokeStyle = '#5A3518'; ctx.lineWidth = 2;
+  ctx.strokeRect(-s, -s * 0.8, s * 2, s * 1.6);
+  ctx.beginPath(); ctx.moveTo(-s, -s * 0.8); ctx.lineTo(s, s * 0.8); ctx.moveTo(s, -s * 0.8); ctx.lineTo(-s, s * 0.8); ctx.stroke();
+  ctx.fillStyle = '#FFC46B'; ctx.fillRect(-s * 0.18, -s * 0.25, s * 0.36, s * 0.5);
+  // Little flames licking the lid.
+  [-0.55, 0, 0.55].forEach((d, i) => {
+    const h = s * (0.5 + 0.2 * Math.sin(t * 9 + i * 2));
+    ctx.fillStyle = i === 1 ? '#FFE16B' : '#FF7A3A';
+    ctx.beginPath(); ctx.moveTo(d * s - s * 0.2, -s * 0.8); ctx.quadraticCurveTo(d * s, -s * 0.8 - h * 1.6, d * s + s * 0.2, -s * 0.8); ctx.fill();
+  });
+  ctx.restore();
+  hpBar(ctx, x, y - s * 2, tile * 0.8, c.hp / c.max, '#FFE08A');
+}
+// Tapping the map: hit the crate if you tapped it, else select a tile (or clear).
 $('td').addEventListener('click', (ev) => {
   const { tile } = tdCanvas();
   const rect = $('td').getBoundingClientRect();
-  const c = Math.floor((ev.clientX - rect.left) / tile), r = Math.floor((ev.clientY - rect.top) / tile);
+  const fx = (ev.clientX - rect.left) / tile, fy = (ev.clientY - rect.top) / tile;
   const td = tdState();
-  if (r >= TD.rows || c < 0 || c >= TD.cols || TD_CELLS.has(c + ',' + r)) { td.sel = null; ui.emberDirty = true; return; }
-  td.sel = { c, r };
-  Sound.click();
+  if (td.crate && Math.hypot(fx - td.crate.x, fy - td.crate.y) < 0.7) {
+    td.crate.hp -= td.crate.max * CRATE.tap;
+    td.crate.hurt = 0.12;
+    td.shots.push({ kind: 'splash', x: td.crate.x, y: td.crate.y, t: 0.35 });
+    Sound.tap();
+    if (td.crate.hp <= 0) salvageCrate(td);
+    return;
+  }
+  const c = Math.floor(fx), r = Math.floor(fy);
+  const same = td.sel && td.sel.c === c && td.sel.r === r;
+  if (same || r >= TD.rows || c < 0 || c >= TD.cols || TD_CELLS.has(c + ',' + r)) td.sel = null;
+  else { td.sel = { c, r }; Sound.click(); }
   ui.emberDirty = true;
   updateUI();
 });
+// The build / upgrade menu pops up on the map beside the tile you tapped.
 function renderTdPanel() {
   const td = tdState();
-  const panel = $('tdPanel');
-  if (!td.sel) {
-    panel.innerHTML = `<span class="sub">${S.ember.log || 'Tap a dark tile beside the path to build a tower. Fires that reach your reef hurt it.'}</span>`;
-    return;
-  }
-  const t = S.ember.towers.find((x) => x.c === td.sel.c && x.r === td.sel.r);
+  $('tdPanel').innerHTML = `<span class="sub">${S.ember.log || 'Tap a dark tile beside the lava to build a tower. Fires that reach your reef burn it.'}</span>`;
+  const pop = $('tdPop');
+  if (!td.sel) { pop.hidden = true; return; }
+  const t = towerAt(td.sel.c, td.sel.r);
   if (!t) {
-    panel.innerHTML = '<div class="tower-opts">' + loadout().map((k) => {
+    pop.innerHTML = '<div class="row"><b>Build a tower</b><button type="button" class="td-x" data-close aria-label="Close">×</button></div><div class="tower-opts">' + loadout().map((k) => {
       const s = TOWERS[k];
-      return `<button type="button" class="tower-opt" data-build="${k}" style="border-color:${s.color}"><b style="color:${s.color}">${s.name}</b><span>${s.desc}</span><span class="tcost" data-cost="${k}"></span></button>`;
+      return `<button type="button" class="tower-opt" data-build="${k}" style="--tc:${s.color}"><i></i><b>${s.short}</b><span>${s.desc}</span><span class="tcost" data-cost="${k}"></span></button>`;
     }).join('') + '</div>';
   } else {
     const spec = TOWERS[t.type];
     const maxed = t.lvl >= TD_MAX_LVL - 1;
-    panel.innerHTML = `<div class="row"><b style="color:${spec.color}">${spec.name} · Lv ${t.lvl + 1}</b><span class="small muted">${t.type === 'clam' ? 'Boosts towers beside it' : fmt(towerDmg(t)) + ' damage · every ' + towerRate(t).toFixed(2) + 's'}</span></div>
-      <div class="two"><button type="button" class="btn small-btn ember-btn" id="tUp" ${maxed ? 'disabled' : ''}>${maxed ? 'Max level' : 'Upgrade · ' + fmt(towerCost(t.type, t.lvl + 1))}</button>
-      <button type="button" class="btn" id="tSell">Sell · +${fmt(Math.floor(towerCost(t.type, t.lvl) * sellRate()))}</button></div>`;
+    pop.innerHTML = `<div class="row"><b style="color:${spec.color}">${towerName(t)}${t.evo ? ' · Evolved' : ' · Lv ' + (t.lvl + 1)}</b><button type="button" class="td-x" data-close aria-label="Close">×</button></div>
+      <span class="small muted">${t.off > 0 ? 'Greyed out by a blast · ' : ''}${t.type === 'clam' ? 'Boosts towers beside it' : fmt(towerDmg(t)) + ' damage · every ' + towerRate(t).toFixed(2) + 's · reach ' + towerRange(t).toFixed(1)}${t.evo ? ' · towers touching it get +25% damage' : nearEvolved(t) ? ' · boosted' : ''}</span>
+      <div class="two">${t.evo ? '<button type="button" class="btn small-btn ember-btn" disabled>Evolved</button>'
+        : maxed ? '<button type="button" class="btn small-btn evo-btn" id="tEvo">Evolve…</button>'
+        : `<button type="button" class="btn small-btn ember-btn" id="tUp">Upgrade · ${fmt(towerCost(t.type, t.lvl + 1))}</button>`}
+      <button type="button" class="btn small-btn" id="tSell">Sell · +${fmt(sellValue(t))}</button></div>`;
   }
+  pop.hidden = false;
+  // Above the tile in the lower half of the map, below it in the upper half.
+  const { tile } = tdCanvas();
+  const cv = $('td');
+  const pw = pop.offsetWidth, ph = pop.offsetHeight;
+  const left = Math.max(4, Math.min(cv.offsetLeft + (td.sel.c + 0.5) * tile - pw / 2, cv.offsetLeft + cv.offsetWidth - pw - 4));
+  const top = td.sel.r >= TD.rows / 2 ? cv.offsetTop + td.sel.r * tile - ph - 6 : cv.offsetTop + (td.sel.r + 1) * tile + 6;
+  pop.style.left = left + 'px';
+  pop.style.top = top + 'px';
 }
-$('tdPanel').addEventListener('click', (ev) => {
+$('tdPop').addEventListener('click', (ev) => {
   const td = tdState();
+  if (ev.target.closest('[data-close]')) { td.sel = null; ui.emberDirty = true; updateUI(); return; }
   const build = ev.target.closest('[data-build]');
   if (build && td.sel) {
     const cost = towerCost(build.dataset.build);
@@ -2383,14 +3488,15 @@ $('tdPanel').addEventListener('click', (ev) => {
     S.ember.towers.push({ c: td.sel.c, r: td.sel.r, type: build.dataset.build, lvl: 0, cd: 0 });
     Sound.buy();
   }
-  const t = td.sel && S.ember.towers.find((x) => x.c === td.sel.c && x.r === td.sel.r);
+  const t = td.sel && towerAt(td.sel.c, td.sel.r);
   if (t && ev.target.closest('#tUp')) {
     const cost = towerCost(t.type, t.lvl + 1);
     if (S.lumen < cost || t.lvl >= TD_MAX_LVL - 1) return;
     S.lumen -= cost; t.lvl += 1; Sound.milestone();
   }
+  if (t && ev.target.closest('#tEvo')) { Sound.click(); openEvo(t); return; }
   if (t && ev.target.closest('#tSell')) {
-    S.lumen += Math.floor(towerCost(t.type, t.lvl) * sellRate());
+    S.lumen += sellValue(t);
     S.ember.towers = S.ember.towers.filter((x) => x !== t);
     td.sel = null; Sound.click();
   }
@@ -2398,9 +3504,138 @@ $('tdPanel').addEventListener('click', (ev) => {
   save();
   updateUI();
 });
+// The evolution wheel, paid in Ember Pearls that grow with your progress: a spin costs
+// half of what the current wave pays (an Extra spin makes the next one free), and landing
+// on Evolve costs three waves' worth. You need both to spin, so a win is always paid for.
+// Each outcome is split into two slices around the wheel.
+const EVO_OUTCOMES = {
+  evolve: { label: 'Evolve', color: '#6FE3A5', weight: 30 },
+  extra: { label: 'Extra spin', color: '#6FB8FF', weight: 15 },
+  safe: { label: 'No luck, but safe', color: '#B5C2DA', weight: 25 },
+  unlucky: { label: 'Unlucky: Lv 1', color: '#FF6B6B', weight: 28 },
+  random: { label: 'Randomiser', color: '#FFC46B', weight: 2 },
+};
+// The Randomiser gets one thin slice; it evolves the tower into a different tower's form.
+const EVO_ORDER = ['evolve', 'safe', 'unlucky', 'extra', 'random', 'evolve', 'safe', 'unlucky', 'extra'];
+function evoSlices() {
+  let a = 0;
+  return EVO_ORDER.map((k) => {
+    const span = EVO_OUTCOMES[k].weight * 3.6 / EVO_ORDER.filter((x) => x === k).length;
+    const sl = { k, start: a, span };
+    a += span;
+    return sl;
+  });
+}
+const evoSpinCost = () => Math.ceil(pearlsPerWave(S.ember.wave) * 0.5);
+const evoFee = () => Math.ceil(pearlsPerWave(S.ember.wave) * 3);
+const evoNeed = (t) => (evoFree(t) ? 0 : evoSpinCost()) + evoFee();
+const evoFree = (t) => ui.evoFree === t;
+function openEvo(t) {
+  ui.evoTower = t;
+  const spot = evoSpot(t);
+  const where = spot && (spot.c > t.c ? 'to its right' : spot.c < t.c ? 'to its left' : spot.r > t.r ? 'below it' : 'above it');
+  $('evTitle').textContent = 'Evolve ' + TOWERS[t.type].name + '?';
+  $('evNow').textContent = spot
+    ? `Success makes it a ${EVO_NAMES[t.type]}: ×${EVO.dmg} damage, faster, longer reach, and every tower touching it gets +25% damage. It grows into the tile ${where}${spot.eats ? ', swallowing the ' + towerName(spot.eats) + ' there (no refund)' : ''}.`
+    : 'No room to grow: every tile beside it is lava, the edge, or another evolved tower.';
+  const pt = (deg, r) => { const q = (deg - 90) * Math.PI / 180; return [Math.cos(q) * r, Math.sin(q) * r]; };
+  $('evSvg').innerHTML = evoSlices().map((sl) => {
+    const [x1, y1] = pt(sl.start, 96), [x2, y2] = pt(sl.start + sl.span, 96);
+    return `<path d="M0 0 L${x1} ${y1} A96 96 0 0 1 ${x2} ${y2} Z" fill="${EVO_OUTCOMES[sl.k].color}" stroke="#0B1026" stroke-width="1.5"/>`;
+  }).join('') + '<circle r="14" fill="#0B1026" stroke="#FFC46B" stroke-width="3"/>';
+  $('evLegend').innerHTML = Object.values(EVO_OUTCOMES).map((o) => `<span class="wkey"><i style="background:${o.color}"></i><b>${o.label}</b><span>${o.weight}%</span></span>`).join('');
+  $('evResult').textContent = '';
+  $('evResult').className = 'center strong';
+  $('evo').hidden = false;
+  syncEvo();
+}
+// Spin button: its price (or "Free spin"), and hidden once the tower evolved or dropped.
+function syncEvo() {
+  const t = ui.evoTower;
+  const over = !t || !S.ember.towers.includes(t) || t.evo || t.lvl < TD_MAX_LVL - 1;
+  $('evSpin').hidden = over && !ui.evoSpinning;
+  if (over) return;
+  $('evSpin').textContent = (evoFree(t) ? 'Free spin' : 'Spin · ' + fmt(evoSpinCost()) + ' Pearls');
+  $('evSpin').disabled = ui.evoSpinning || !evoSpot(t) || S.pearls < evoNeed(t);
+  $('evCost').textContent = S.pearls < evoNeed(t)
+    ? `You need ${fmt(evoNeed(t))} Ember Pearls to spin (you have ${fmt(S.pearls)}): the spin, plus ${fmt(evoFee())} to evolve if it lands.`
+    : `Evolving costs ${fmt(evoFee())} Ember Pearls if it lands. You have ${fmt(S.pearls)}.`;
+}
+$('evSpin').addEventListener('click', () => {
+  const t = ui.evoTower;
+  if (!t || ui.evoSpinning || !S.ember.towers.includes(t) || t.evo || !evoSpot(t)) return;
+  const wasFree = evoFree(t);
+  if (S.pearls < evoNeed(t)) return;
+  if (wasFree) ui.evoFree = null; else S.pearls -= evoSpinCost();
+  let r = Math.random() * 100, out = 'evolve';
+  for (const [k, o] of Object.entries(EVO_OUTCOMES)) { if ((r -= o.weight) < 0) { out = k; break; } }
+  const slices = evoSlices();
+  const mine = slices.filter((sl) => sl.k === out);
+  const sl = mine[Math.floor(Math.random() * mine.length)];
+  // Turn the wheel so the chosen slice stops under the pointer at the top.
+  const land = sl.start + sl.span * (0.2 + Math.random() * 0.6);
+  const from = ui.evoAngle || 0;
+  ui.evoAngle = Math.ceil(from / 360) * 360 + 5 * 360 + (360 - land);
+  ui.evoSpinning = true;
+  $('evResult').textContent = 'Spinning…';
+  $('evResult').className = 'center strong';
+  syncEvo();
+  Sound.seed();
+  spinWheel($('evSvg'), from, ui.evoAngle, 4000, slices.map((x) => x.start)).then(() => {
+    ui.evoSpinning = false;
+    resolveEvo(t, out);
+  });
+});
+function resolveEvo(t, out) {
+  const td = tdState();
+  const spot = S.ember.towers.includes(t) && evoSpot(t);
+  if (!S.ember.towers.includes(t)) {
+    $('evResult').textContent = 'The tower is gone.';
+  } else if ((out === 'evolve' || out === 'random') && spot) {
+    if (spot.eats) S.ember.towers = S.ember.towers.filter((x) => x !== spot.eats);
+    const was = TOWERS[t.type].name;
+    if (out === 'random') { const others = Object.keys(TOWERS).filter((k) => k !== t.type); t.type = others[Math.floor(Math.random() * others.length)]; }
+    const fee = Math.min(S.pearls, evoFee());
+    S.pearls -= fee;
+    t.evo = true; t.c2 = spot.c; t.r2 = spot.r;
+    const [x, y] = towerCenter(t);
+    td.shots.push({ kind: 'sparkle', x, y, t: 0.5, color: '#FFE08A' });
+    $('evResult').textContent = (out === 'random' ? `Randomiser! It became a ${EVO_NAMES[t.type]} instead` : `It evolved into a ${EVO_NAMES[t.type]}!`) + ` (−${fmt(fee)} Pearls)`;
+    $('evResult').className = 'center strong win';
+    S.ember.log = `Your ${was} ${out === 'random' ? 'was randomised into' : 'evolved into'} a ${EVO_NAMES[t.type]}${spot.eats ? ', swallowing a ' + towerName(spot.eats) : ''}.`;
+    td.sel = null;
+    Sound.milestone();
+  } else if (out === 'extra') {
+    ui.evoFree = t;
+    $('evResult').textContent = 'Extra spin! Your next spin is free.';
+    $('evResult').className = 'center strong win';
+    Sound.perk();
+  } else if (out === 'unlucky') {
+    t.lvl = 0;
+    $('evResult').textContent = 'Unlucky: back to Lv 1.';
+    S.ember.log = `The ${TOWERS[t.type].name}'s evolution went wrong: it's back to Lv 1.`;
+    td.sel = null;
+    Sound.descend();
+  } else {
+    $('evResult').textContent = 'No luck, but safe: it keeps Lv 5.';
+    Sound.click();
+  }
+  ui.emberDirty = true;
+  save();
+  updateUI();
+  syncEvo();
+}
+// Close any time to get back to the game; a spin still in motion finishes and pays out.
+$('evClose').addEventListener('click', () => { $('evo').hidden = true; });
 $('eStart').addEventListener('click', startWave);
 $('eAuto').addEventListener('click', () => {
   S.ember.auto = !S.ember.auto;
+  Sound.click(); save(); updateUI();
+});
+$('eFast').addEventListener('click', () => {
+  const i = TD_SPEEDS.indexOf(tdSpeed());
+  S.ember.speed = TD_SPEEDS[(i + 1) % TD_SPEEDS.length];
+  delete S.ember.fast;
   Sound.click(); save(); updateUI();
 });
 function updateEmber() {
@@ -2410,17 +3645,26 @@ function updateEmber() {
   $('eRate').textContent = '+' + fmt(e.ashRate) + ' Ash per second';
   $('ePearl').textContent = 'Ember Pearls: ' + fmt(S.pearls);
   $('eWave').textContent = 'Wave ' + e.wave + ' · best ' + e.best;
-  $('eLine').textContent = td.running ? `Fires left: ${td.toSpawn + td.fires.length}` : e.auto ? 'Next wave starting…' : 'Ready for the next wave';
+  const shiftAt = Math.ceil(e.wave / TD.shiftEvery) * TD.shiftEvery;
+  const shiftSoon = shiftAt > (e.pathAt || 0) && shiftAt - e.wave <= 2;
+  $('eLine').textContent = td.bonus ? `Bonus wave · ${td.queue.length + td.fires.length} loot left` : td.bonusNext ? 'Bonus wave next!'
+    : e.shiftPending ? 'The lava is about to shift!' : shiftSoon ? `Lava shifts after wave ${shiftAt}!`
+    : (td.running ? `${td.queue.length + td.fires.length} fires · ` : 'Wave pays ') + `+${fmt(pearlsPerWave(e.wave))} Pearls`;
   $('eHp').textContent = `Reef ${Math.max(0, e.hp)}/${emberMaxHp()}`;
   $('eStart').disabled = td.running || tideFull();
   $('eAuto').textContent = e.auto ? 'Auto waves: on' : 'Auto waves: off';
   $('eAuto').setAttribute('aria-pressed', String(e.auto));
+  $('eFast').textContent = tdSpeed() + '×';
+  $('eFast').setAttribute('aria-pressed', String(tdSpeed() > 1));
   if (ui.emberDirty) { renderTdPanel(); ui.emberDirty = false; }
+  if (!$('evo').hidden) syncEvo();
   document.querySelectorAll('[data-cost]').forEach((el) => {
     const cost = towerCost(el.dataset.cost);
     el.textContent = fmt(cost) + ' Ash';
     el.closest('button').disabled = S.lumen < cost;
   });
+  const up = $('tUp'), sel = td.sel && towerAt(td.sel.c, td.sel.r);
+  if (up && sel && sel.lvl < TD_MAX_LVL - 1) up.disabled = S.lumen < towerCost(sel.type, sel.lvl + 1);
 }
 // Second tab in the Ember Wastes: pick 3 tower types, then buy tower upgrades with Ash.
 function buildTowerGuide(list) {
@@ -2443,7 +3687,7 @@ function buildTowerGuide(list) {
   });
   const up = document.createElement('div');
   up.className = 'row';
-  up.innerHTML = '<b>Tower upgrades</b><span class="small muted">Reset with the tide</span>';
+  up.innerHTML = '<b>Tower upgrades</b><span class="small muted">Bought with Ash, kept</span>';
   list.appendChild(up);
   ui.emberRows = EMBER_UPS.map((u) => {
     const row = document.createElement('div');
@@ -2515,6 +3759,7 @@ function visitZone(i) {
   S.zone = i;
   S.homeZone = i === EMBER ? null : EMBER;
   ui.td = null;
+  ui.arena = null;
   ui.pearlView = null;
   ui.lastGain = 0;
   applyZone();
@@ -2648,6 +3893,7 @@ $('endRewind').addEventListener('click', () => {
 
 // ---- Loop ------------------------------------------------------------------
 function updateUI() {
+  autoOpenChests();
   checkFills();
   checkHatchTimer();
   checkDives();
@@ -2671,7 +3917,7 @@ function updateUI() {
   if (ui.tab === 'tide') updateTide();
   if (ui.tab === 'pearls') updatePearls();
   if (ui.tab === 'dive') updateDive();
-  $('tideDot').hidden = pearlGain() < 1;
+  $('tideDot').hidden = isEmber() || pearlGain() < 1;
   if (tideFull() && !ui.washing && !ui.forcedOpen && $('modal').hidden) {
     ui.forcedOpen = true;
     showModal({
@@ -2690,6 +3936,8 @@ let last = performance.now();
 let uiAcc = 0;
 let saveAcc = 0;
 function frame(now) {
+  // Ask for the next frame first, so one bad frame can't stop the game.
+  requestAnimationFrame(frame);
   const dt = Math.min(1, (now - last) / 1000);
   last = now;
   if (!tideFull()) earn(ratePerSec() * dt);
@@ -2698,19 +3946,21 @@ function frame(now) {
     S.light = 1; // the old dimming-light rule was replaced by the battler
   }
   if (isKelp()) gardenTick(Date.now());
-  if (isTrench()) battleTick(Date.now());
+  if (isTrench()) {
+    for (let left = dt; left > 0; left -= 0.05) arenaTick(Math.min(0.05, left));
+    if (ui.tab === 'reef') drawArena();
+  }
   if (isEmber()) {
     // Small fixed steps keep fast fires from skipping past towers on a slow frame.
-    for (let left = dt; left > 0; left -= 0.05) emberTick(Math.min(0.05, left));
+    for (let left = dt * tdSpeed(); left > 0; left -= 0.05) emberTick(Math.min(0.05, left));
     if (ui.tab === 'reef') drawTD(dt);
   }
 
-  while (S.revealed < CREATURES.length && S.tideEarned >= CREATURES[S.revealed].cost * 0.4) S.revealed++;
+  while (S.revealed < CREATURES.length && S.tideEarned >= CREATURES[S.revealed].cost * 0.4) { S.revealed++; renderCollection(); }
 
   uiAcc += dt; saveAcc += dt;
   if (uiAcc > 0.1) { uiAcc = 0; updateUI(); }
   if (saveAcc > 5) { saveAcc = 0; save(); }
-  requestAnimationFrame(frame);
 }
 
 document.addEventListener('visibilitychange', () => {
@@ -2739,8 +3989,19 @@ S.audio = Object.assign(freshState().audio, S.audio);
 S.opts = Object.assign(freshState().opts, S.opts);
 syncSettings();
 applyZone();
+switchTab('reef'); // open on this zone's own home screen, not the Shallows reef
 renderFish();
 growCoral();
 offlineCatchUp();
+if (S.resetNote) {
+  delete S.resetNote;
+  save();
+  showModal({
+    title: 'Deep Bloom Demo v1',
+    body: 'The game has been rebuilt for Demo v1, so everyone starts fresh from the Shallows. Your settings were kept. Have fun diving!',
+    ok: 'Dive in',
+    cancel: null,
+  });
+}
 updateUI();
 requestAnimationFrame(frame);

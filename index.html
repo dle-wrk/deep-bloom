@@ -65,6 +65,12 @@
       <div id="burstChip" class="burst" hidden>Current burst ×3</div>
       <button id="seed" class="seed" type="button" aria-label="Glowing seed: tap for a burst" hidden></button>
     </div>
+    <button id="collection" type="button" class="collection" aria-label="Creature collection: open the Creatures tab">
+      <div class="row"><span class="label">Collection</span><span id="colCount" class="small muted"></span></div>
+      <div id="colGrid" class="col-grid" aria-hidden="true"></div>
+      <div class="row"><span id="colNext" class="small strong"></span><span id="colPct" class="small muted"></span></div>
+      <div class="bar"><div id="colBar" class="fill"></div></div>
+    </button>
   </section>
 
   <!-- Kelp Forest home: a merge garden instead of tapping -->
@@ -112,15 +118,11 @@
       <div id="bPips" class="pips"></div>
     </div>
     <div id="arena" class="arena">
-      <div class="arena-floor" aria-hidden="true"></div>
-      <div class="hp left"><span id="myName" class="small strong">Your Guardian</span><div class="bar"><div id="myHp" class="fill jade-bg"></div></div></div>
-      <div class="hp right"><span id="foeName" class="small strong"></span><div class="bar"><div id="foeHp" class="fill red-bg"></div></div></div>
+      <canvas id="arenaCv" aria-label="Trench arena: your Guardian holds the glowing floor while sea creatures swim in from the dark."></canvas>
       <button id="bubble" type="button" class="lumen-bubble"></button>
-      <svg id="guardian" aria-hidden="true" class="guardian" width="72" height="80" viewBox="0 0 90 100"><circle cx="45" cy="30" r="22" fill="#172848" stroke="#9DB8FF" stroke-width="3"/><circle cx="45" cy="30" r="12" fill="#9DB8FF" opacity=".5"/><path d="M25 52 C 25 80, 65 80, 65 52 Z" fill="#9DB8FF"/><path d="M65 60 L 88 48" stroke="#FFC46B" stroke-width="5" stroke-linecap="round"/><path id="gCrown" d="M30 20 L 36 6 L 45 16 L 54 6 L 60 20" fill="none" stroke="#4C6E78" stroke-width="3" stroke-linejoin="round"/></svg>
-      <svg id="foe" aria-hidden="true" class="foe" width="104" height="70" viewBox="0 0 90 40"><path id="foeBody" d="M4 22 C 6 8, 50 4, 72 18 C 60 32, 16 36, 4 22 Z"/><path id="foeTail" d="M70 18 L 88 6 L 84 20 L 88 34 Z"/><path d="M6 22 L 22 26" stroke="#050C1C" stroke-width="2.5" stroke-linecap="round"/><circle cx="18" cy="16" r="2.5" fill="#FFF3C4"/></svg>
-      <div id="arenaPops" class="pops" aria-hidden="true"></div>
-      <span class="arena-hint">Tap the bubble for gear · ×2 from level 4</span>
     </div>
+    <div id="bStats" class="bstats"></div>
+    <div id="bFoes" class="row small muted"></div>
     <div class="panel">
       <span id="bLog" class="sub"></span>
       <div id="bDrops" class="stack tight"></div>
@@ -149,8 +151,8 @@
         <button type="button" class="icon-btn settings-open" aria-label="Settings"><svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></svg></button>
       </div>
     </header>
-    <div class="row"><span id="eLine"></span><span id="eHp" class="strong"></span></div>
-    <div class="td-wrap"><canvas id="td" aria-label="Ember defense map. Tap a scorched tile beside the path to build a tower."></canvas></div>
+    <div class="row"><span id="eLine"></span><span class="row-end"><span id="eHp" class="strong"></span><button id="eFast" type="button" class="speed-btn" aria-pressed="false" aria-label="Game speed">1×</button></span></div>
+    <div class="td-wrap"><canvas id="td" aria-label="Ember defense map. Tap a dark tile beside the lava to build a tower. Tap a burning crate to help put it out."></canvas><div id="tdPop" class="td-pop" hidden></div></div>
     <div id="tdPanel" class="panel"></div>
     <div class="two">
       <button id="eStart" type="button" class="btn primary ember-btn">Start wave</button>
@@ -312,12 +314,32 @@
         <span class="wheel-pointer" aria-hidden="true"></span>
         <svg id="wheelSvg" class="wheel-svg" viewBox="-100 -100 200 200" role="img" aria-label="Slot wheel"></svg>
       </div>
+      <div id="wLegend" class="wheel-legend"></div>
       <p id="wResult" class="center strong" aria-live="polite"></p>
       <label class="slider"><span>Shards to spend <b id="wStakeVal"></b></span><input id="wStake" type="range" min="1" max="1" step="1"></label>
       <details class="wups"><summary>Wheel upgrades</summary><div id="wUps"></div></details>
       <div class="stack">
         <button id="wSpin" type="button" class="btn primary gear-btn">Spin</button>
         <button id="wClose" type="button" class="btn ghost">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Evolution wheel: a maxed Ember tower gambles its levels on evolving -->
+  <div id="evo" class="modal" hidden>
+    <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="evTitle">
+      <h2 id="evTitle"></h2>
+      <p id="evNow" class="sub"></p>
+      <div class="wheel-wrap">
+        <span class="wheel-pointer" aria-hidden="true"></span>
+        <svg id="evSvg" class="wheel-svg" viewBox="-100 -100 200 200" role="img" aria-label="Evolution wheel"></svg>
+      </div>
+      <div id="evLegend" class="wheel-legend"></div>
+      <p id="evCost" class="sub small center"></p>
+      <p id="evResult" class="center strong" aria-live="polite"></p>
+      <div class="stack">
+        <button id="evSpin" type="button" class="btn primary ember-btn">Spin</button>
+        <button id="evClose" type="button" class="btn ghost">Close</button>
       </div>
     </div>
   </div>
